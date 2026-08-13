@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="droost-engine">
+  <description>
+    PHP CodeSniffer configuration for the Droost engine.
+
+    Holds the same bar as the droost module's gate (Drupal + DrupalPractice at
+    the pinned coder version) so classes lifted out of the module diff to
+    near-zero. Trimmed for a plain PHP library: only src/ and tests/ are
+    scanned, and only .php files exist here — none of the Drupal extension
+    file types (.module, .install, .info.yml, …) that the module's ruleset
+    enumerates.
+  </description>
+
+  <file>src</file>
+  <file>tests</file>
+
+  <rule ref="Drupal"/>
+  <rule ref="DrupalPractice"/>
+
+  <arg name="extensions" value="php"/>
+
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+</ruleset>

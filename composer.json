@@ -1,0 +1,38 @@
+{
+    "name": "droost/engine",
+    "description": "Framework-free engine behind Droost: QA verify loop, AI-harness installers, guidelines/skills corpus services, scaffold blueprints, OKF wiki core, and code search/graph core for Drupal projects.",
+    "type": "library",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "nikic/php-parser": "^5.0",
+        "psr/log": "^2.0 || ^3.0",
+        "symfony/process": "^6.4 || ^7.0",
+        "symfony/yaml": "^6.4 || ^7.0 || ^8.0"
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "drupal/coder": "^8.3",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5 || ^11.5"
+    },
+    "suggest": {
+        "ext-pdo_sqlite": "SQLite-backed code-graph/vector storage for repo-only (no-site) usage"
+    },
+    "autoload": {
+        "psr-4": {
+            "Droost\\Engine\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Droost\\Engine\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
+        "sort-packages": true
+    }
+}

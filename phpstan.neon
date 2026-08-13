@@ -1,0 +1,12 @@
+# PHPStan configuration for the Droost engine.
+#
+# Level max with an EMPTY baseline — the same bar the droost module holds for
+# all shipping code, and there is deliberately no baseline file: the engine is
+# framework-free PHP, so nothing here needs the Drupal-API escape hatches that
+# force baselines elsewhere. Code that cannot pass level max does not land.
+parameters:
+  level: max
+  paths:
+    - src
+    - tests
+  treatPhpDocTypesAsCertain: false

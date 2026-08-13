@@ -1,0 +1,9 @@
+.DS_Store
+
+# Dependencies. The lock file is deliberately NOT committed: this is a library,
+# so consumers resolve their own graph and CI resolves fresh on every run.
+/vendor/
+/composer.lock
+
+# PHPUnit result cache.
+/.phpunit.cache/

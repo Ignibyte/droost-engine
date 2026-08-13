@@ -12,16 +12,16 @@ site to boot.
 
 Areas (each depends only on `Support` and `Extension`, never on a sibling):
 
-| Area | What it holds |
-| --- | --- |
-| `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store |
-| `Extension` | The extension-locator port and its filesystem implementation |
-| `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results |
-| `Guideline` / `Skill` | Guidelines corpus reader and skill emitters |
-| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) |
-| `Scaffold` | Blueprint registry and the framework-free code blueprints |
-| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, staleness |
-| `Search` | Code search and graph core: chunkers, extractors, indexer, stores |
+| Area | What it holds | Landed |
+| --- | --- | --- |
+| `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
+| `Extension` | The extension-locator port and its filesystem implementation | no |
+| `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
+| `Guideline` / `Skill` | Guidelines corpus reader and skill emitters | no |
+| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | no |
+| `Scaffold` | Blueprint registry and the framework-free code blueprints | no |
+| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, staleness | no |
+| `Search` | Code search and graph core: chunkers, extractors, indexer, stores | no |
 
 ## Status
 
@@ -30,6 +30,13 @@ area by area (phases B1 through B5 of the extraction plan); each tranche lands
 behind a tagged release before the module switches over to it. Treat the API as
 unstable until 1.0: breaking changes bump the minor, and consumers should pin
 per minor (`~0.1.0`).
+
+Landed so far (0.1.1): `Support\ProjectRoot`, `Support\PathGuard`,
+`Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner` and
+`Verify\LegResult` — the pilot tranche, chosen because it has zero coupling to
+Drupal and therefore proves the packaging pipeline on the smallest possible
+surface. The rest of `Support` (clock, state store) arrives with the areas that
+need it.
 
 ## Install
 

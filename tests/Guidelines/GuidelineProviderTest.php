@@ -8,6 +8,7 @@ use Droost\Engine\Guidelines\GuidelineProvider;
 use Droost\Engine\Site\ExtensionLocatorInterface;
 use Droost\Engine\Site\UnknownSite;
 use Droost\Engine\Tests\Site\FakeSite;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -167,6 +168,75 @@ final class GuidelineProviderTest extends TestCase {
     $this->assertIsString($topic);
     $this->assertStringStartsWith("# Routing\n", $topic);
     $this->assertStringContainsString('Drupal version unknown', $provider->getCoreStamped());
+  }
+
+  /**
+   * A core major with no variant directory falls back to the baseline.
+   *
+   * Distinct from the unknown-version case: here the site answered, and the
+   * answer simply has no tailored content — which must serve the baseline
+   * rather than nothing.
+   */
+  public function testMismatchedMajorFallsBackToTheBaseline(): void {
+    $provider = $this->provider(new FakeSite([], '12.0.0'));
+
+    $topic = $provider->getTopic('routing');
+    $this->assertIsString($topic);
+    $this->assertStringStartsWith("# Routing\n", $topic);
+  }
+
+  /**
+   * A contributed topic version-branches the same way the shipped ones do.
+   */
+  public function testContributedTopicsVersionBranch(): void {
+    $dir = $this->appRoot . '/modules/acme/guidelines/topics/11';
+    mkdir($dir, 0777, TRUE);
+    file_put_contents($dir . '/acme.md', "# Acme 11\n\nThe 11 flavour.\n");
+
+    $topic = $this->provider(new FakeSite(['acme' => 'modules/acme'], '11.4.2'))->getTopic('acme');
+    $this->assertIsString($topic);
+    $this->assertStringStartsWith('# Acme 11', $topic);
+  }
+
+  /**
+   * A version directory is never itself listed as a topic.
+   */
+  public function testVersionDirectoryIsNeverListed(): void {
+    $names = $this->topicNames($this->provider(new FakeSite([], '11.4.2')));
+
+    $this->assertNotContains('11', $names);
+    $this->assertSame(array_unique($names), $names);
+  }
+
+  /**
+   * The major derives from the version string, malformed disabling it.
+   *
+   * @param string $version
+   *   The version string.
+   * @param string $expected
+   *   The expected major.
+   */
+  #[DataProvider('majorCases')]
+  public function testDeriveMajor(string $version, string $expected): void {
+    $this->assertSame($expected, GuidelineProvider::deriveMajor($version));
+  }
+
+  /**
+   * Version-derivation cases.
+   *
+   * @return array<int, array{string, string}>
+   *   [version, expected major].
+   */
+  public static function majorCases(): array {
+    return [
+      ['11.4.2', '11'],
+      ['10.3.0', '10'],
+      ['12.0.0-dev', '12'],
+      ['9.5.11', '9'],
+      ['abc', ''],
+      ['', ''],
+      ['x.1', ''],
+    ];
   }
 
   /**

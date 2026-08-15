@@ -10,18 +10,32 @@ half — plain PHP with no Drupal dependency — so the same logic can serve the
 Drupal module, a standalone CLI, and repo-only tooling that has no installed
 site to boot.
 
-Areas (each depends only on `Support` and `Extension`, never on a sibling):
+Areas (each depends only on `Support` and `Site`, never on a sibling):
 
 | Area | What it holds | Landed |
 | --- | --- | --- |
 | `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
-| `Extension` | The extension-locator port and its filesystem implementation | no |
+| `Site` | What the engine may know about the site it runs against: the extension-locator port and the no-site implementation | yes |
 | `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
-| `Guideline` / `Skill` | Guidelines corpus reader and skill emitters | no |
-| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | no |
+| `Guidelines` / `Skills` | Guidelines corpus reader and skill emitters | yes |
+| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
 | `Scaffold` | Blueprint registry and the framework-free code blueprints | no |
 | `Wiki` | OKF wiki core: frontmatter, provenance, page composition, staleness | no |
 | `Search` | Code search and graph core: chunkers, extractors, indexer, stores | no |
+
+## The `Site` port, and why it is three-valued
+
+`Site\ExtensionLocatorInterface` is how everything else asks what the project
+has. Its `isInstalled()` returns `true`, `false`, **or `null`** — because the
+engine runs both inside a booted site, where absence is a fact, and against a
+bare checkout, where it is not knowable.
+
+That distinction is load-bearing rather than fussy. "Not installed" prunes: it
+drops a topic from the guidelines catalog, so it never becomes a skill, so it
+never reaches the agent. Letting `null` collapse into `false` would make a
+plain checkout silently report half a corpus, and guidance that is missing
+looks exactly like guidance that was never written. `Site\UnknownSite` answers
+`null` to everything, and callers are contracted to read that as "show it".
 
 ## Status
 
@@ -31,12 +45,19 @@ behind a tagged release before the module switches over to it. Treat the API as
 unstable until 1.0: breaking changes bump the minor, and consumers should pin
 per minor (`~0.1.0`).
 
-Landed so far (0.1.1): `Support\ProjectRoot`, `Support\PathGuard`,
-`Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner` and
-`Verify\LegResult` — the pilot tranche, chosen because it has zero coupling to
-Drupal and therefore proves the packaging pipeline on the smallest possible
-surface. The rest of `Support` (clock, state store) arrives with the areas that
-need it.
+**0.1.1** landed the pilot tranche — `Support\ProjectRoot`, `Support\PathGuard`,
+`Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner`,
+`Verify\LegResult` — chosen because it has zero coupling to Drupal and
+therefore proved the packaging pipeline on the smallest possible surface.
+
+**0.2.0** adds the guidance tranche (B2): `Site\ExtensionLocatorInterface` and
+`Site\UnknownSite`, `Guidelines\GuidelineProvider`, `Skills\Skill`,
+`Skills\SkillProvider`, `Skills\SkillMdWriter`, and the whole `Harness` area —
+fifteen classes that write AGENTS.md, SKILL.md, and the per-harness config
+files for Claude, Codex, Gemini, opencode and Qwen. The minor bumps because
+consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
+
+The rest of `Support` (clock, state store) arrives with the areas that need it.
 
 ## Install
 

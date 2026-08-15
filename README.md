@@ -21,7 +21,7 @@ Areas (each depends only on `Support` and `Site`, never on a sibling):
 | `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
 | `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
 | `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
-| `Search` | Code search and graph core: chunkers, extractors, indexer, stores | no |
+| `Search` | Code search and graph core: chunkers, extractors, index diffing | partly — stores and indexer still to come |
 
 ## Why `Scaffold` is a partial lift
 
@@ -86,6 +86,12 @@ same flag pairs) so a regenerated page is byte-identical to the last one. That
 was verified against core's own serializer on a booted site, not assumed;
 `Wiki\BundleLocatorInterface` is the one port it needs, and the module's
 existing `WikiSettings` already satisfies it unchanged.
+
+**0.5.0** adds the pure search core (B5a): the chunkers, `Graph\GraphVisitor`
+and `Graph\YamlGraphExtractor`, index diffing, and the embedding and
+vector-store interfaces. The storage layer stays in the module for now — four
+classes built on Drupal's database API, which need a port of their own before
+they can move (B5b).
 
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 

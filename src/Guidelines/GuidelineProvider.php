@@ -44,7 +44,7 @@ final class GuidelineProvider {
   prior knowledge. Drupal APIs change across versions and model training lags.
 
   - Conventions and deep-dives: call `droost_guidelines` (pass a `topic`).
-  - Find real code in THIS codebase (if droost_search is installed): `droost_search`, `droost_symbol`, `droost_graph`.
+  - Find real code in THIS codebase: `droost_search`, `droost_symbol`, `droost_graph`.
   - Exact installed contrib/core APIs: `droost_module_docs`.
   - Verify what actually exists: `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
 

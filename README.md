@@ -20,7 +20,7 @@ Areas (each depends only on `Support` and `Site`, never on a sibling):
 | `Guidelines` / `Skills` | Guidelines corpus reader and skill emitters | yes |
 | `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
 | `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
-| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, staleness | no |
+| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
 | `Search` | Code search and graph core: chunkers, extractors, indexer, stores | no |
 
 ## Why `Scaffold` is a partial lift
@@ -78,6 +78,14 @@ consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
 
 **0.3.0** adds the scaffold spine and the eight template-only blueprints (B3),
 for the reasons in "Why `Scaffold` is a partial lift" above.
+
+**0.4.0** adds the OKF wiki core (B4) — frontmatter parsing, provenance,
+page composition, bundle reading — plus `Support\Yaml`, which reproduces
+Drupal's YAML settings exactly (`Dumper(2)`, inline level `PHP_INT_MAX`, the
+same flag pairs) so a regenerated page is byte-identical to the last one. That
+was verified against core's own serializer on a booted site, not assumed;
+`Wiki\BundleLocatorInterface` is the one port it needs, and the module's
+existing `WikiSettings` already satisfies it unchanged.
 
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 

@@ -19,9 +19,28 @@ Areas (each depends only on `Support` and `Site`, never on a sibling):
 | `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
 | `Guidelines` / `Skills` | Guidelines corpus reader and skill emitters | yes |
 | `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
-| `Scaffold` | Blueprint registry and the framework-free code blueprints | no |
+| `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
 | `Wiki` | OKF wiki core: frontmatter, provenance, page composition, staleness | no |
 | `Search` | Code search and graph core: chunkers, extractors, indexer, stores | no |
+
+## Why `Scaffold` is a partial lift
+
+The scaffold area splits along a line that is not negotiable. Droost composes
+Drush's ~70 code generators rather than reinventing them, and that runner needs
+the **Drush runtime container** — `Drush::hasContainer()`, and Drush's own
+`ApplicationFactory`. Seven blueprints (service, content-entity, config-entity,
+event-subscriber, block, form, plugin) are built on it, and an eighth reflects
+over `DrushCommands` to compute its reserved method list. None of those can
+live in a package that does not depend on Drush, so they stay in the module.
+
+What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
+`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the eight
+blueprints that emit from templates rather than delegating: access-handler,
+config-schema, hook, kernel-test, mcp-tool, route-subscriber, sdc,
+views-handler. The registry accepts both halves, so a consumer sees one set.
+
+That the two halves are wired together at the container rather than merged is
+the point: the contract is framework-free even where an implementation is not.
 
 ## The `Site` port, and why it is three-valued
 
@@ -56,6 +75,9 @@ therefore proved the packaging pipeline on the smallest possible surface.
 fifteen classes that write AGENTS.md, SKILL.md, and the per-harness config
 files for Claude, Codex, Gemini, opencode and Qwen. The minor bumps because
 consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
+
+**0.3.0** adds the scaffold spine and the eight template-only blueprints (B3),
+for the reasons in "Why `Scaffold` is a partial lift" above.
 
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 

@@ -20,7 +20,16 @@ use PHPUnit\Framework\TestCase;
  * written; these cases are what stops the settings drifting back.
  *
  * A test asserting only "it round-trips" would pass under either formatting
- * and catch nothing, so the expectations here are literal output.
+ * and catch nothing, so the expectations here are literal output — except
+ * where the layout belongs to symfony/yaml rather than to us.
+ *
+ * That exception is real and worth knowing about. symfony/yaml 8 compacts
+ * block sequences of mappings ("- k: 1") where 7 expanded them ("-\n  k: 1"),
+ * with identical dump flags. Droost and Drupal resolve ONE symfony/yaml per
+ * project, so a site's pages stay consistent with each other and with what
+ * Drupal itself writes — but a project that crosses that Symfony major will
+ * reformat every page with a list in its frontmatter exactly once, and the
+ * wiki's `sources:` list is one. Expected churn, not a regression.
  */
 final class YamlTest extends TestCase {
 
@@ -73,12 +82,26 @@ final class YamlTest extends TestCase {
   }
 
   /**
-   * A list of mappings keeps the block sequence form.
+   * A list of mappings stays a block sequence, never flow style.
+   *
+   * Deliberately not asserting the exact layout. symfony/yaml 7 writes the
+   * dash on its own line ("-\n    k: 1") and symfony/yaml 8 compacts it
+   * ("- k: 1"), and neither is something this class chooses — the flags are
+   * identical on both. Pinning one spelling made this test fail on CI while
+   * passing locally, which said nothing about Droost and everything about
+   * which Symfony happened to resolve.
+   *
+   * What IS ours, and what would break the wiki, is asserted: block style
+   * rather than flow, and a two-space indent. See the class docblock for what
+   * the version difference means for byte-identical regeneration.
    */
   public function testListOfMappingsStaysBlockFormatted(): void {
     $yaml = Yaml::encode(['rows' => [['k' => 1], ['k' => 2]]]);
 
-    $this->assertSame("rows:\n  -\n    k: 1\n  -\n    k: 2\n", $yaml);
+    $this->assertStringStartsWith("rows:\n  -", $yaml);
+    $this->assertStringNotContainsString('{', $yaml);
+    $this->assertStringNotContainsString('[', $yaml);
+    $this->assertSame(['rows' => [['k' => 1], ['k' => 2]]], Yaml::decode($yaml));
   }
 
   /**

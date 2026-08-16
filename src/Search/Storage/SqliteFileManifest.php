@@ -18,6 +18,8 @@ use Droost\Engine\Search\FileManifestInterface;
  */
 final class SqliteFileManifest implements FileManifestInterface {
 
+  use SqliteTransactionTrait;
+
   /**
    * The manifest table name.
    */
@@ -113,7 +115,7 @@ final class SqliteFileManifest implements FileManifestInterface {
    */
   public function replaceAll(array $rows, int $timestamp): void {
     $this->ensureSchema();
-    $this->transactional(function () use ($rows, $timestamp): void {
+    $this->runTransactional($this->pdo, function () use ($rows, $timestamp): void {
       $this->pdo->exec('DELETE FROM ' . self::TABLE);
       $this->insertBatched($rows, $timestamp);
     });
@@ -124,7 +126,7 @@ final class SqliteFileManifest implements FileManifestInterface {
    */
   public function apply(array $upserts, array $removals, int $timestamp): void {
     $this->ensureSchema();
-    $this->transactional(function () use ($upserts, $removals, $timestamp): void {
+    $this->runTransactional($this->pdo, function () use ($upserts, $removals, $timestamp): void {
       $this->deleteFiles($removals);
       // The changed files are deleted before reinsertion rather than upserted,
       // matching the Drupal implementation exactly — the two stores must agree
@@ -178,36 +180,6 @@ final class SqliteFileManifest implements FileManifestInterface {
         $row['type'],
         $timestamp,
       ]);
-    }
-  }
-
-  /**
-   * Runs a unit of work in a transaction, rolling back on any throwable.
-   *
-   * @param callable():void $work
-   *   The work.
-   *
-   * @throws \Throwable
-   *   Whatever the work threw, after the rollback.
-   */
-  private function transactional(callable $work): void {
-    // A nested call would throw on begin; the indexer never nests, but a
-    // caller that already opened one keeps ownership of it.
-    $owns = !$this->pdo->inTransaction();
-    if ($owns) {
-      $this->pdo->beginTransaction();
-    }
-    try {
-      $work();
-      if ($owns) {
-        $this->pdo->commit();
-      }
-    }
-    catch (\Throwable $e) {
-      if ($owns && $this->pdo->inTransaction()) {
-        $this->pdo->rollBack();
-      }
-      throw $e;
     }
   }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Scaffold;
 
+use Droost\Engine\Support\ProjectRoot;
+
 /**
  * Shared file-writing helpers for blueprints (dry-run + skip-if-exists aware).
  */
@@ -51,7 +53,60 @@ abstract class AbstractBlueprint implements BlueprintInterface {
    *   When the target directory or file cannot be written.
    */
   protected function writeFile(ScaffoldContext $context, string $relative, string $content, ScaffoldResult $result): void {
-    $path = $context->appRoot . '/' . $relative;
+    $this->write($context, $context->appRoot . '/' . $relative, $relative, $content, $result);
+  }
+
+  /**
+   * Writes a generated file at the PROJECT root, above the docroot.
+   *
+   * Most generated files belong inside the Drupal app root, which is what
+   * writeFile() assumes. A few do not: a Drupal recipe lives at
+   * `<project>/recipes/<name>/`, a sibling of the docroot rather than
+   * something inside it, and writing one into the docroot produces a recipe
+   * Drupal will never find.
+   *
+   * The reported path is relative to the APP root either way, so a project
+   * file shows as `../recipes/…` and is never mistaken for a docroot path.
+   * On layouts where Drupal is itself the project root, ProjectRoot falls
+   * back to the app root and the two are the same place.
+   *
+   * @param \Droost\Engine\Scaffold\ScaffoldContext $context
+   *   The scaffold context.
+   * @param string $relative
+   *   The path relative to the project root.
+   * @param string $content
+   *   The file content.
+   * @param \Droost\Engine\Scaffold\ScaffoldResult $result
+   *   The result accumulator.
+   *
+   * @throws \RuntimeException
+   *   When the target directory or file cannot be written.
+   */
+  protected function writeProjectFile(ScaffoldContext $context, string $relative, string $content, ScaffoldResult $result): void {
+    $relative = ltrim($relative, '/');
+    $projectRoot = (new ProjectRoot($context->appRoot))->path();
+    $label = $projectRoot === $context->appRoot ? $relative : '../' . $relative;
+    $this->write($context, $projectRoot . '/' . $relative, $label, $content, $result);
+  }
+
+  /**
+   * Writes one file, honouring dry-run and never overwriting.
+   *
+   * @param \Droost\Engine\Scaffold\ScaffoldContext $context
+   *   The scaffold context.
+   * @param string $path
+   *   The absolute path to write.
+   * @param string $relative
+   *   The app-root-relative path, for reporting.
+   * @param string $content
+   *   The file content.
+   * @param \Droost\Engine\Scaffold\ScaffoldResult $result
+   *   The result accumulator.
+   *
+   * @throws \RuntimeException
+   *   When the target directory or file cannot be written.
+   */
+  private function write(ScaffoldContext $context, string $path, string $relative, string $content, ScaffoldResult $result): void {
     if (is_file($path)) {
       $result->addSkipped($relative);
       return;

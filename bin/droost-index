@@ -1,0 +1,144 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * @file
+ * Indexes a repository into a SQLite code graph, with no Drupal site.
+ *
+ * Usage:
+ *   droost-index <repo-dir> [--db=<file>] [--full] [--tests]
+ *   droost-index <repo-dir> --find=<name>
+ *   droost-index <repo-dir> --callers=<fqcn>
+ *   droost-index <repo-dir> --fan=<module>
+ *
+ * The database defaults to <repo-dir>/.droost-index.sqlite. Indexing is
+ * incremental: run it again and only changed files re-parse.
+ */
+
+declare(strict_types=1);
+
+use Droost\Engine\Search\Chunker\ChunkerRegistry;
+use Droost\Engine\Search\Chunker\DocChunker;
+use Droost\Engine\Search\Chunker\PhpChunker;
+use Droost\Engine\Search\Chunker\TwigChunker;
+use Droost\Engine\Search\Graph\PhpGraphExtractor;
+use Droost\Engine\Search\Graph\SqliteCodeGraphStorage;
+use Droost\Engine\Search\Graph\YamlGraphExtractor;
+use Droost\Engine\Search\RepoIndexer;
+use Droost\Engine\Search\RepoSourceDiscovery;
+use Droost\Engine\Search\Storage\SqliteFileManifest;
+
+// Works both as a dependency (vendor/bin) and from a clone of the engine.
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+  if (is_file($candidate)) {
+    require_once $candidate;
+    break;
+  }
+}
+if (!class_exists(RepoIndexer::class)) {
+  fwrite(STDERR, "Could not locate the Composer autoloader.\n");
+  exit(1);
+}
+
+$arguments = array_slice($argv, 1);
+$options = [];
+$positional = [];
+foreach ($arguments as $argument) {
+  if (str_starts_with($argument, '--')) {
+    $parts = explode('=', substr($argument, 2), 2);
+    $options[$parts[0]] = $parts[1] ?? TRUE;
+    continue;
+  }
+  $positional[] = $argument;
+}
+
+$root = realpath($positional[0] ?? '.');
+if ($root === FALSE || !is_dir($root)) {
+  fwrite(STDERR, "Usage: droost-index <repo-dir> [--db=FILE] [--full] [--tests]\n");
+  exit(1);
+}
+$database = is_string($options['db'] ?? NULL) ? $options['db'] : $root . '/.droost-index.sqlite';
+
+try {
+  $pdo = new PDO('sqlite:' . $database);
+}
+catch (Throwable $e) {
+  fwrite(STDERR, 'Could not open ' . $database . ': ' . $e->getMessage() . "\n");
+  exit(1);
+}
+// One connection, three stores: the manifest and the graph must commit or
+// roll back against the same file, not two that can disagree.
+$graph = new SqliteCodeGraphStorage($pdo);
+$manifest = new SqliteFileManifest($pdo);
+
+// Query modes: answer from the existing index and exit.
+if (is_string($options['find'] ?? NULL)) {
+  foreach ($graph->findSymbols($options['find'], 40) as $symbol) {
+    printf("%-12s %s\n             %s:%d\n", $symbol['kind'], $symbol['fqcn'], $symbol['file'], $symbol['line']);
+  }
+  exit(0);
+}
+if (is_string($options['callers'] ?? NULL)) {
+  $target = $options['callers'];
+  if (!str_contains($target, '\\')) {
+    $resolved = $graph->resolveShortName($target, 10);
+    if (count($resolved) === 1) {
+      $target = $resolved[0];
+      fwrite(STDERR, 'Resolved to ' . $target . "\n");
+    }
+    elseif ($resolved !== []) {
+      fwrite(STDERR, "Ambiguous; pick one:\n  " . implode("\n  ", $resolved) . "\n");
+      exit(1);
+    }
+  }
+  foreach ($graph->callers($target, 200) as $edge) {
+    printf("%-14s %s\n", $edge['kind'], $edge['src']);
+  }
+  exit(0);
+}
+if (is_string($options['fan'] ?? NULL)) {
+  $summary = $graph->fanSummary($options['fan']);
+  if (!$summary['ready']) {
+    fwrite(STDERR, "No graph yet — index first.\n");
+    exit(1);
+  }
+  printf("%s: %d symbols\n", $options['fan'], $summary['symbols']);
+  foreach (['outbound', 'inbound'] as $direction) {
+    printf("  %s (%d edges)\n", $direction, $summary[$direction . '_edges']);
+    foreach ($summary[$direction] as $row) {
+      printf("    %-30s %4d edges, %3d symbols\n", $row['module'], $row['edges'], $row['symbols']);
+    }
+  }
+  if ($summary['truncated']) {
+    fwrite(STDERR, "NOTE: the edge cap was reached; these counts are a floor, not a total.\n");
+  }
+  exit(0);
+}
+
+$indexer = new RepoIndexer(
+  new RepoSourceDiscovery($root, ($options['tests'] ?? FALSE) === TRUE),
+  new ChunkerRegistry(new PhpChunker(), new DocChunker(), new TwigChunker()),
+  new PhpGraphExtractor(),
+  new YamlGraphExtractor(),
+  $manifest,
+  $graph,
+  $root,
+);
+
+$started = microtime(TRUE);
+$report = $indexer->index(($options['full'] ?? FALSE) === TRUE);
+printf(
+  "%s index of %s in %.1fs\n  %d files (+%d ~%d -%d =%d)\n  %d chunks, %d symbols, %d edges\n  %s\n",
+  ucfirst($report['mode']),
+  $root,
+  microtime(TRUE) - $started,
+  $report['files'],
+  $report['added'],
+  $report['changed'],
+  $report['removed'],
+  $report['unchanged'],
+  $report['chunks'],
+  $report['symbols'],
+  $report['edges'],
+  $database,
+);

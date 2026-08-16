@@ -34,5 +34,8 @@
             "dealerdirect/phpcodesniffer-composer-installer": true
         },
         "sort-packages": true
-    }
+    },
+    "bin": [
+        "bin/droost-index"
+    ]
 }

@@ -75,6 +75,30 @@ final class GuidelineProvider {
   ];
 
   /**
+   * Matches a topic's own requirement declaration.
+   *
+   * A topic may name the module it describes on its first line:
+   *
+   * @code
+   * <!-- droost:requires eca -->
+   * # ECA: ...
+   * @endcode
+   *
+   * The map above only reaches topics this package ships, which made the
+   * site-fidelity rule unextendable: any module can drop a topic into
+   * `guidelines/topics/`, but gating it needed an edit and a release HERE.
+   * A topic about a contrib module could therefore only ship ungated, telling
+   * every site how to use something it may not have — the exact thing the map
+   * exists to prevent. Declaring it in the file keeps the fact next to the
+   * content it qualifies, and the seam open to everyone.
+   *
+   * An HTML comment rather than YAML frontmatter: it needs no parser, it is
+   * invisible wherever the Markdown is rendered, and a topic that predates
+   * this simply has none.
+   */
+  private const string REQUIRES_PATTERN = '/\A<!--\s*droost:requires\s+([a-z0-9_]+)\s*-->\s*\R/';
+
+  /**
    * Constructs a GuidelineProvider.
    *
    * @param string $appRoot
@@ -188,7 +212,7 @@ final class GuidelineProvider {
     $topics = [];
     foreach ($this->topicDirs() as $dir) {
       foreach ($this->files($dir) as $name => $path) {
-        if (!isset($topics[$name]) && $this->topicApplies($name)) {
+        if (!isset($topics[$name]) && $this->topicApplies($name, $path)) {
           $topics[$name] = ['name' => $name, 'summary' => $this->summary($path)];
         }
       }
@@ -219,13 +243,13 @@ final class GuidelineProvider {
     foreach ($this->topicDirs() as $dir) {
       $path = $dir . '/' . $name . '.md';
       if (is_file($path)) {
-        $body = (string) file_get_contents($path);
-        if ($this->topicApplies($name)) {
+        $body = $this->stripRequires((string) file_get_contents($path));
+        if ($this->topicApplies($name, $path)) {
           return $body;
         }
         return sprintf(
           "> NOT INSTALLED ON THIS SITE: the %s module is not enabled here, so nothing below describes this project's current state. Install it first, or treat this as background reading.\n\n%s",
-          self::TOPIC_REQUIRES[$name],
+          (string) $this->topicRequires($name, $path),
           $body,
         );
       }
@@ -242,17 +266,63 @@ final class GuidelineProvider {
    *
    * @param string $name
    *   The topic machine name.
+   * @param string|null $path
+   *   The topic file, when the caller already resolved it — so the topic's
+   *   own declaration can be read. NULL falls back to the shipped map.
    *
    * @return bool
    *   TRUE when the topic applies to this site.
    */
-  private function topicApplies(string $name): bool {
-    $required = self::TOPIC_REQUIRES[$name] ?? NULL;
+  private function topicApplies(string $name, ?string $path = NULL): bool {
+    $required = $this->topicRequires($name, $path);
     if ($required === NULL) {
       return TRUE;
     }
     // Only an explicit FALSE prunes. NULL is unknown, and unknown shows.
     return $this->site->isInstalled($required) !== FALSE;
+  }
+
+  /**
+   * The module a topic describes, if it declares or is mapped to one.
+   *
+   * The topic's own `<!-- droost:requires ... -->` line wins, so a module
+   * shipping a topic about itself needs no change here. The shipped map is
+   * the fallback for the topics that predate the declaration.
+   *
+   * @param string $name
+   *   The topic machine name.
+   * @param string|null $path
+   *   The topic file, when the caller already resolved it. Omitted callers
+   *   fall back to the shipped map alone rather than re-reading the corpus.
+   *
+   * @return string|null
+   *   The required module, or NULL when the topic applies everywhere.
+   */
+  private function topicRequires(string $name, ?string $path = NULL): ?string {
+    if ($path !== NULL && is_file($path)) {
+      $head = (string) file_get_contents($path, FALSE, NULL, 0, 256);
+      if (preg_match(self::REQUIRES_PATTERN, $head, $matches) === 1) {
+        return $matches[1];
+      }
+    }
+    return self::TOPIC_REQUIRES[$name] ?? NULL;
+  }
+
+  /**
+   * Strips a topic's requirement declaration from what gets served.
+   *
+   * The marker is metadata about the topic, not part of it. Leaving it in
+   * would put a machine-readable directive into an agent's context, where the
+   * best case is that it is ignored.
+   *
+   * @param string $body
+   *   The raw topic Markdown.
+   *
+   * @return string
+   *   The body without its declaration line.
+   */
+  private function stripRequires(string $body): string {
+    return preg_replace(self::REQUIRES_PATTERN, '', $body) ?? $body;
   }
 
   /**
@@ -357,7 +427,11 @@ final class GuidelineProvider {
    *   A one-line summary, capped at 160 characters.
    */
   private function summary(string $path): string {
-    $content = (string) file_get_contents($path);
+    // Strip the requirement declaration first: it is not a heading, so the
+    // loop below would otherwise return the marker itself as the summary and
+    // the catalog would advertise every gated topic as "<!-- droost:requires
+    // … -->".
+    $content = $this->stripRequires((string) file_get_contents($path));
     foreach (preg_split('/\r?\n/', $content) ?: [] as $line) {
       $line = trim($line);
       if ($line !== '' && !str_starts_with($line, '#')) {

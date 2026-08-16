@@ -106,6 +106,83 @@ final class GuidelineProviderTest extends TestCase {
   }
 
   /**
+   * A topic can declare its own module, without an edit to this package.
+   *
+   * The shipped map only reaches topics this package owns, so gating a topic
+   * about a contrib module used to need a change and a release HERE. Any
+   * module can drop a topic into guidelines/topics/; it must be able to say
+   * what that topic is about, or the only shippable contrib topic is an
+   * ungated one that tells every site how to use something it may not have.
+   */
+  public function testTopicDeclaresItsOwnRequirement(): void {
+    file_put_contents(
+      $this->corpus . '/topics/eca.md',
+      "<!-- droost:requires eca -->\n# ECA\n\nEvent-condition-action.\n",
+    );
+
+    $absent = $this->provider(new FakeSite([]));
+    $this->assertNotContains('eca', $this->topicNames($absent), 'Declared and absent: pruned.');
+
+    $present = $this->provider(new FakeSite(['eca' => 'modules/eca']));
+    $this->assertContains('eca', $this->topicNames($present), 'Declared and present: listed.');
+  }
+
+  /**
+   * The declaration names the module in the not-installed warning.
+   */
+  public function testDeclaredRequirementNamesTheModuleInTheWarning(): void {
+    file_put_contents(
+      $this->corpus . '/topics/eca.md',
+      "<!-- droost:requires eca -->\n# ECA\n\nEvent-condition-action.\n",
+    );
+
+    $topic = $this->provider(new FakeSite([]))->getTopic('eca');
+    $this->assertIsString($topic);
+    $this->assertStringContainsString('the eca module is not enabled here', $topic);
+  }
+
+  /**
+   * The marker never reaches an agent, or the catalog.
+   *
+   * It is metadata about the topic, not part of it. Served, it would put a
+   * machine-readable directive into an agent's context; in the catalog it
+   * would BE the summary, because it is the first line that is not a heading.
+   */
+  public function testRequirementMarkerIsStrippedFromBodyAndSummary(): void {
+    file_put_contents(
+      $this->corpus . '/topics/eca.md',
+      "<!-- droost:requires eca -->\n# ECA\n\nEvent-condition-action.\n",
+    );
+    $provider = $this->provider(new FakeSite(['eca' => 'modules/eca']));
+
+    $topic = $provider->getTopic('eca');
+    $this->assertIsString($topic);
+    $this->assertStringStartsWith('# ECA', $topic);
+    $this->assertStringNotContainsString('droost:requires', $topic);
+
+    foreach ($provider->listTopics() as $row) {
+      if ($row['name'] === 'eca') {
+        $this->assertSame('Event-condition-action.', $row['summary']);
+        return;
+      }
+    }
+    $this->fail('The declared topic was not listed.');
+  }
+
+  /**
+   * A topic's own declaration beats the shipped map.
+   */
+  public function testDeclarationOverridesTheShippedMap(): void {
+    file_put_contents(
+      $this->corpus . '/topics/media.md',
+      "<!-- droost:requires acme -->\n# Media\n\nMedia entities.\n",
+    );
+
+    $names = $this->topicNames($this->provider(new FakeSite(['acme' => 'modules/acme'])));
+    $this->assertContains('media', $names, 'The declaration decides, not the map entry for "media".');
+  }
+
+  /**
    * With no site to ask, everything applies.
    *
    * The load-bearing case. UnknownSite answers NULL, and NULL must not prune —

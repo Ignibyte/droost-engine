@@ -71,44 +71,6 @@ final class KernelTestBlueprint extends AbstractBlueprint {
   }
 
   /**
-   * Normalises the --modules CSV into a kernel $modules chain.
-   *
-   * Order is preserved because kernel tests install modules in the order
-   * given, and the target module is appended rather than prepended so its
-   * dependencies still come first.
-   *
-   * @param string $csv
-   *   The raw comma-separated option value.
-   * @param string $module
-   *   The target module, which must appear in the list.
-   *
-   * @return array<int, string>
-   *   The machine names to install, in order, without duplicates.
-   */
-  private function moduleList(string $csv, string $module): array {
-    $names = [];
-    foreach (explode(',', $csv) as $candidate) {
-      $name = $this->machineName(trim($candidate));
-      // machineName() maps "-" to "_" before filtering, so punctuation-only
-      // entries survive as "_" or "___", and digits survive as "123". Neither
-      // can name a module: the kernel throws "Unavailable module" at boot, far
-      // from the typo. Require a real machine name instead.
-      if (preg_match('/^[a-z][a-z0-9_]*$/', $name) !== 1) {
-        continue;
-      }
-      if (!in_array($name, $names, TRUE)) {
-        $names[] = $name;
-      }
-    }
-    // Omitting the module under test is the classic mistake, and it fails at
-    // runtime far from the cause — so append it rather than trusting the list.
-    if (!in_array($module, $names, TRUE)) {
-      $names[] = $module;
-    }
-    return $names;
-  }
-
-  /**
    * The kernel test template.
    *
    * @return string

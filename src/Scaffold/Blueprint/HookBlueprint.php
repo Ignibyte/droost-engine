@@ -132,7 +132,7 @@ final class HookBlueprint extends AbstractBlueprint {
     final class {{class}}Test extends TestCase {
 
       /**
-       * The {{method}} method carries the #[Hook('{{hook}}')] attribute.
+       * The scaffolded method carries the #[Hook] attribute it was built with.
        */
       public function testHookAttribute(): void {
         $method = new \ReflectionMethod({{class}}::class, '{{method}}');

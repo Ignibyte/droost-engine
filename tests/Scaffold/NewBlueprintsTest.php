@@ -6,6 +6,7 @@ namespace Droost\Engine\Tests\Scaffold;
 
 use Droost\Engine\Scaffold\Blueprint\Ckeditor5PluginBlueprint;
 use Droost\Engine\Scaffold\Blueprint\MediaSourceBlueprint;
+use Droost\Engine\Scaffold\Blueprint\MigrateBlueprint;
 use Droost\Engine\Scaffold\Blueprint\PluginDeriverBlueprint;
 use Droost\Engine\Scaffold\BlueprintInterface;
 use Droost\Engine\Scaffold\ScaffoldContext;
@@ -23,6 +24,7 @@ use Symfony\Component\Yaml\Yaml;
  */
 #[CoversClass(PluginDeriverBlueprint::class)]
 #[CoversClass(MediaSourceBlueprint::class)]
+#[CoversClass(MigrateBlueprint::class)]
 #[CoversClass(Ckeditor5PluginBlueprint::class)]
 final class NewBlueprintsTest extends TestCase {
 
@@ -65,6 +67,68 @@ final class NewBlueprintsTest extends TestCase {
     // The load-bearing line: without deriver:, the deriver class never runs.
     $this->assertStringContainsString('deriver: \\Drupal\\mymod\\Plugin\\Derivative\\MyThingDeriver::class', $block);
     $this->assertStringContainsString("id: 'my_thing'", $block);
+  }
+
+  /**
+   * A migrate SOURCE comes with the migration that runs it.
+   *
+   * The load-bearing half. Migrations are discovered from `migrations/*.yml`,
+   * never from plugin classes, so a source emitted on its own would not appear
+   * in `drush migrate:status` at all — a file that looks finished and does
+   * nothing. Same reasoning as the deriver above.
+   */
+  public function testMigrateSourceEmitsTheMigrationThatRunsIt(): void {
+    $result = $this->generate(
+      new MigrateBlueprint(),
+      ['plugin-type' => 'source', 'id' => 'legacy_items', 'label' => 'Legacy Items'],
+    );
+
+    $this->assertSame([
+      'modules/mymod/src/Plugin/migrate/source/LegacyItems.php',
+      'modules/mymod/migrations/mymod_legacy_items.yml',
+    ], $result->created);
+
+    $source = $this->read('modules/mymod/src/Plugin/migrate/source/LegacyItems.php');
+    // SqlBase would need a second database connection in settings.php before
+    // anything could run; SourcePluginBase runs as generated.
+    $this->assertStringContainsString('extends SourcePluginBase', $source);
+    // Narrow deliberately: the docblock EXPLAINS why not SqlBase, so a blanket
+    // substring check fails on the explanation rather than the code.
+    $this->assertStringNotContainsString('extends SqlBase', $source);
+    $this->assertStringNotContainsString('use Drupal\\migrate\\Plugin\\migrate\\source\\SqlBase;', $source);
+    $this->assertStringContainsString("#[MigrateSource(id: 'legacy_items')]", $source);
+    $this->assertStringContainsString('public function getIds()', $source);
+
+    $migration = $this->read('modules/mymod/migrations/mymod_legacy_items.yml');
+    $this->assertStringContainsString('plugin: legacy_items', $migration);
+    $this->assertStringContainsString("plugin: 'entity:node'", $migration);
+  }
+
+  /**
+   * A migrate PROCESS plugin is emitted alone — it needs no migration.
+   */
+  public function testMigrateProcessIsEmittedAlone(): void {
+    $result = $this->generate(
+      new MigrateBlueprint(),
+      ['plugin-type' => 'process', 'id' => 'tidy_title'],
+    );
+
+    $this->assertSame(
+      ['modules/mymod/src/Plugin/migrate/process/TidyTitle.php'],
+      $result->created,
+    );
+    $process = $this->read('modules/mymod/src/Plugin/migrate/process/TidyTitle.php');
+    $this->assertStringContainsString('extends ProcessPluginBase', $process);
+    $this->assertStringContainsString('public function transform(', $process);
+  }
+
+  /**
+   * An unknown plugin type is refused by name.
+   */
+  public function testMigrateRefusesAnUnknownPluginType(): void {
+    $this->expectException(\InvalidArgumentException::class);
+    $this->expectExceptionMessage('--plugin-type=source or process');
+    $this->generate(new MigrateBlueprint(), ['plugin-type' => 'destination']);
   }
 
   /**

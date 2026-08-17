@@ -106,13 +106,23 @@ final class VerifyRunnerLogicTest extends TestCase {
   }
 
   /**
-   * The deprecations argv is phpstan at level 0 with a JSON report, no -c.
+   * The deprecations argv: phpstan at level 0 with the leg's OWN config.
+   *
+   * The -c must point at the packaged deprecations.neon — never at the
+   * module's own phpstan.neon — and that file must disable
+   * reportUnmatchedIgnoredErrors, or a module's legitimate level-max inline
+   * ignores read as false deprecation failures (they match nothing at
+   * level 0 by construction).
    */
   public function testBuildDeprecationsArgv(): void {
+    $argv = VerifyRunner::buildDeprecationsArgv('/bin/phpstan', '/mod');
+    $config = dirname(__DIR__, 2) . '/src/Verify/deprecations.neon';
     $this->assertSame(
-      ['/bin/phpstan', 'analyse', '--no-progress', '--error-format=json', '--level=0', '/mod'],
-      VerifyRunner::buildDeprecationsArgv('/bin/phpstan', '/mod'),
+      ['/bin/phpstan', 'analyse', '--no-progress', '--error-format=json', '--level=0', '-c', $config, '/mod'],
+      $argv,
     );
+    $this->assertFileExists($config);
+    $this->assertStringContainsString('reportUnmatchedIgnoredErrors: false', (string) file_get_contents($config));
   }
 
   /**

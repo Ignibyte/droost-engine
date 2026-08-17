@@ -237,9 +237,13 @@ final class VerifyRunner {
    * mglaman/phpstan-drupal + phpstan-deprecation-rules extensions
    * (auto-registered by phpstan/extension-installer); level 0 keeps the
    * general-analysis noise floor minimal while the custom deprecation rules
-   * (which are not level-gated) still fire — the drupal-check shape. No
-   * config file is ever passed: a module-local `phpstan.neon` (typically
-   * level max) must not bleed general findings into this leg.
+   * (which are not level-gated) still fire — the drupal-check shape. The
+   * module's own `phpstan.neon` (typically level max) is never used — it
+   * must not bleed general findings into this leg — but the leg does pass
+   * its OWN packaged config, because phpstan's default
+   * reportUnmatchedIgnoredErrors would otherwise turn the module's
+   * legitimate level-max inline ignores into false deprecation failures:
+   * at level 0 those ignores match nothing by construction.
    *
    * @param string $bin
    *   The phpstan binary path.
@@ -250,7 +254,16 @@ final class VerifyRunner {
    *   The argv.
    */
   public static function buildDeprecationsArgv(string $bin, string $target): array {
-    return [$bin, 'analyse', '--no-progress', '--error-format=json', '--level=0', $target];
+    return [
+      $bin,
+      'analyse',
+      '--no-progress',
+      '--error-format=json',
+      '--level=0',
+      '-c',
+      __DIR__ . '/deprecations.neon',
+      $target,
+    ];
   }
 
   /**

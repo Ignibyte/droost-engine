@@ -1,0 +1,15 @@
+# The deprecations leg's own phpstan config.
+#
+# Passed via -c by VerifyRunner::buildDeprecationsArgv() so the scan runs
+# against a KNOWN configuration instead of phpstan's defaults: a module-local
+# phpstan.neon (typically level max) must not bleed general findings into
+# this leg, and phpstan's default reportUnmatchedIgnoredErrors must not turn
+# a module's legitimate level-max inline ignores into false deprecation
+# failures — at level 0 those ignores match nothing by construction, which
+# is a property of this leg, not a defect in the scanned module.
+#
+# The level stays on the argv; the deprecation rules themselves come from the
+# project's installed phpstan-drupal + phpstan-deprecation-rules, which
+# phpstan/extension-installer auto-registers regardless of -c.
+parameters:
+  reportUnmatchedIgnoredErrors: false

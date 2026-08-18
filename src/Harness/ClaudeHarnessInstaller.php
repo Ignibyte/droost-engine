@@ -28,10 +28,13 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
    *   The skill provider.
    * @param \Droost\Engine\Skills\SkillMdWriter $writer
    *   The shared SKILL.md renderer (the single format authority).
+   * @param \Droost\Engine\Harness\CommandProvider|null $commands
+   *   The slash-command provider, or NULL for a consumer shipping none.
    */
   public function __construct(
     private readonly SkillProvider $skills,
     private readonly SkillMdWriter $writer,
+    private readonly ?CommandProvider $commands = NULL,
   ) {}
 
   /**
@@ -77,6 +80,15 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       $this->write($root, $dir . '/' . self::SENTINEL, "Droost-authored skill; safe to delete via `drush droost:uninstall`.\n");
       $result->addWritten($dir . '/SKILL.md');
     }
+    // Commands are single files in a directory shared with the user's own:
+    // refresh exactly the provided names, touch nothing else. The names are
+    // droost-prefixed by convention, which is what keeps "refresh" from
+    // ever meaning "clobber something a human wrote".
+    foreach ($this->commands?->getCommands() ?? [] as $name => $content) {
+      $relative = '.claude/commands/' . $name . '.md';
+      $this->write($root, $relative, $content);
+      $result->addWritten($relative);
+    }
   }
 
   /**
@@ -91,6 +103,15 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       if (is_file($absolute . '/' . self::SENTINEL)) {
         $this->deleteDir($root, '.claude/skills/' . basename($absolute));
         $result->addRemoved('.claude/skills/' . basename($absolute) . ' (skill)');
+      }
+    }
+    // Commands: remove exactly the names this provider ships, nothing else —
+    // the same contract as install, mirrored.
+    foreach (array_keys($this->commands?->getCommands() ?? []) as $name) {
+      $relative = '.claude/commands/' . $name . '.md';
+      if (is_file($root . '/' . $relative)) {
+        @unlink($root . '/' . $relative);
+        $result->addRemoved($relative . ' (command)');
       }
     }
   }

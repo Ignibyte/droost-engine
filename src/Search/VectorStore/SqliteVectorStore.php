@@ -156,7 +156,7 @@ final class SqliteVectorStore implements VectorStoreInterface {
   /**
    * {@inheritdoc}
    */
-  public function search(array $vector, int $k = 10, ?string $corpus = NULL): array {
+  public function search(array $vector, int $k = 10, ?string $corpus = NULL, array $metaFilter = []): array {
     if (!$this->tableExists()) {
       return [];
     }
@@ -185,11 +185,17 @@ final class SqliteVectorStore implements VectorStoreInterface {
         continue;
       }
       $meta = is_string($row['meta'] ?? NULL) ? json_decode($row['meta'], TRUE) : NULL;
+      $meta = is_array($meta) ? $meta : [];
+      // The meta filter runs during the scan — before the $k slice below — per
+      // the port's contract: a post-filtered top-k would under-return.
+      if (!self::matchesMeta($meta, $metaFilter)) {
+        continue;
+      }
       $hits[] = [
         'corpus' => is_scalar($row['corpus'] ?? NULL) ? (string) $row['corpus'] : '',
         'ref' => is_scalar($row['ref'] ?? NULL) ? (string) $row['ref'] : '',
         'score' => Cosine::similarity($vector, $stored),
-        'meta' => is_array($meta) ? $meta : [],
+        'meta' => $meta,
       ];
     }
     // Score desc, then (corpus, ref): ties have to break the same way in every
@@ -275,6 +281,26 @@ final class SqliteVectorStore implements VectorStoreInterface {
       (string) json_encode(array_values($vector)),
       $file,
     ]);
+  }
+
+  /**
+   * Whether a row's meta satisfies every requested equality filter.
+   *
+   * @param array<array-key, mixed> $meta
+   *   The row's decoded meta.
+   * @param array<string, scalar> $filter
+   *   The requested key => value equalities.
+   *
+   * @return bool
+   *   TRUE when every filter key is present and equal.
+   */
+  private static function matchesMeta(array $meta, array $filter): bool {
+    foreach ($filter as $key => $value) {
+      if (!array_key_exists($key, $meta) || $meta[$key] !== $value) {
+        return FALSE;
+      }
+    }
+    return TRUE;
   }
 
   /**

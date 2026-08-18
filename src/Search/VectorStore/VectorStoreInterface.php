@@ -94,11 +94,18 @@ interface VectorStoreInterface {
    *   Maximum hits to return.
    * @param string|null $corpus
    *   Restrict to this corpus, or NULL for all.
+   * @param array<string, scalar> $metaFilter
+   *   Equality filters on stored meta keys (e.g. ['scope' => 'custom']). A row
+   *   matches when every named key is present and equal. Implementations MUST
+   *   apply the filter before the $k limit — filtering a k-limited set
+   *   silently under-returns — and may reject keys that are not simple
+   *   identifiers ([A-Za-z0-9_]+). Stores that filter in the database compare
+   *   values as strings, so filter on string meta keys for portable results.
    *
    * @return array<int, array{corpus: string, ref: string, score: float, meta: array<mixed, mixed>}>
    *   Hits ordered by descending similarity (score in [0,1], 1 = identical).
    */
-  public function search(array $vector, int $k = 10, ?string $corpus = NULL): array;
+  public function search(array $vector, int $k = 10, ?string $corpus = NULL, array $metaFilter = []): array;
 
   /**
    * Deletes stored vectors.

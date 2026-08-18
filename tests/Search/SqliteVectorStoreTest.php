@@ -175,4 +175,31 @@ final class SqliteVectorStoreTest extends TestCase {
     $this->assertSame(0, $this->store->count());
   }
 
+  /**
+   * A meta filter constrains hits before the k-limit, not after.
+   */
+  public function testMetaFilterAppliesBeforeTheLimit(): void {
+    // "b1" is the single closest row to the query. A store that filtered a
+    // k-limited set would return only the scope-a rows that happened to
+    // survive the unfiltered cut — one, not the two that exist.
+    $this->store->upsertBatch([
+      ['corpus' => 'php_symbol', 'ref' => 'b1', 'vector' => [1.0, 0.0, 0.0], 'meta' => ['scope' => 'b']],
+      ['corpus' => 'php_symbol', 'ref' => 'a1', 'vector' => [0.9, 0.1, 0.0], 'meta' => ['scope' => 'a']],
+      ['corpus' => 'php_symbol', 'ref' => 'a2', 'vector' => [0.8, 0.2, 0.0], 'meta' => ['scope' => 'a']],
+      ['corpus' => 'php_symbol', 'ref' => 'a3', 'vector' => [0.7, 0.3, 0.0], 'meta' => ['scope' => 'a']],
+    ], 3);
+
+    $filtered = $this->store->search([1.0, 0.0, 0.0], 2, NULL, ['scope' => 'a']);
+    $this->assertSame(['a1', 'a2'], array_column($filtered, 'ref'), 'The two best scope-a rows, not the survivors of an unfiltered top-2.');
+
+    $other = $this->store->search([1.0, 0.0, 0.0], 10, NULL, ['scope' => 'b']);
+    $this->assertSame(['b1'], array_column($other, 'ref'));
+
+    $unfiltered = $this->store->search([1.0, 0.0, 0.0], 2);
+    $this->assertSame(['b1', 'a1'], array_column($unfiltered, 'ref'), 'No filter keeps the plain KNN order.');
+
+    $none = $this->store->search([1.0, 0.0, 0.0], 5, NULL, ['scope' => 'missing']);
+    $this->assertSame([], $none, 'A filter nothing satisfies returns empty, not the unfiltered set.');
+  }
+
 }

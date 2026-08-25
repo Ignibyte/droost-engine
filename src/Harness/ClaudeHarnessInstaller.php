@@ -106,13 +106,27 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       }
     }
     // Commands: remove exactly the names this provider ships, nothing else —
-    // the same contract as install, mirrored.
+    // the same contract as install, mirrored. Nested names then prune the
+    // subdirectories they implied, deepest first and only while empty, so a
+    // user file dropped beside ours keeps its directory alive.
+    $prune = [];
     foreach (array_keys($this->commands?->getCommands() ?? []) as $name) {
       $relative = '.claude/commands/' . $name . '.md';
       if (is_file($root . '/' . $relative)) {
         @unlink($root . '/' . $relative);
         $result->addRemoved($relative . ' (command)');
       }
+      $dir = dirname('.claude/commands/' . $name);
+      while ($dir !== '.claude/commands') {
+        $prune[$dir] = TRUE;
+        $dir = dirname($dir);
+      }
+    }
+    $dirs = array_keys($prune);
+    usort($dirs, static fn (string $a, string $b): int =>
+      substr_count($b, '/') <=> substr_count($a, '/'));
+    foreach ($dirs as $dir) {
+      $this->removeDirIfEmpty($root, $dir);
     }
   }
 

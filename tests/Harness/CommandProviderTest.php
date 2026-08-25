@@ -39,6 +39,35 @@ final class CommandProviderTest extends TestCase {
   }
 
   /**
+   * Nested files become namespaced names, because directories ARE the
+   * namespace: Claude Code serves commands/droost/init.md as /droost:init.
+   * A flat directory keeps flat names, so nothing changes for consumers
+   * that never nest.
+   */
+  public function testNestedCommandsCarryTheirPathAsTheName(): void {
+    $dir = sys_get_temp_dir() . '/droost-cmd-' . bin2hex(random_bytes(6));
+    mkdir($dir . '/droost/workflow', 0755, TRUE);
+    file_put_contents($dir . '/droost/init.md', "Init.\n");
+    file_put_contents($dir . '/droost/workflow/continue.md', "Continue.\n");
+    file_put_contents($dir . '/plain.md', "Plain.\n");
+
+    $commands = (new CommandProvider($dir))->getCommands();
+
+    $this->assertSame(
+      ['droost/init', 'droost/workflow/continue', 'plain'],
+      array_keys($commands),
+    );
+    $this->assertSame("Continue.\n", $commands['droost/workflow/continue']);
+
+    unlink($dir . '/droost/init.md');
+    unlink($dir . '/droost/workflow/continue.md');
+    unlink($dir . '/plain.md');
+    rmdir($dir . '/droost/workflow');
+    rmdir($dir . '/droost');
+    rmdir($dir);
+  }
+
+  /**
    * A missing directory yields no commands and no error.
    */
   public function testMissingDirectoryShipsNothing(): void {

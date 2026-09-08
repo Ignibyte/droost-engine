@@ -39,10 +39,11 @@ final class CommandProviderTest extends TestCase {
   }
 
   /**
-   * Nested files become namespaced names, because directories ARE the
-   * namespace: Claude Code serves commands/droost/init.md as /droost:init.
-   * A flat directory keeps flat names, so nothing changes for consumers
-   * that never nest.
+   * Nested files become namespaced names: directories ARE the namespace.
+   *
+   * Claude Code serves commands/droost/init.md as /droost:init. A flat
+   * directory keeps flat names, so nothing changes for consumers that never
+   * nest.
    */
   public function testNestedCommandsCarryTheirPathAsTheName(): void {
     $dir = sys_get_temp_dir() . '/droost-cmd-' . bin2hex(random_bytes(6));

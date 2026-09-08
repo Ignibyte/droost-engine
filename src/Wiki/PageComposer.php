@@ -60,23 +60,32 @@ final readonly class PageComposer {
    * @param string|null $timestamp
    *   The generation timestamp (RFC 3339), or NULL to omit it. Passed in so the
    *   composer stays pure and deterministic.
+   * @param list<string>|null $chosen
+   *   The project-root-relative paths the page's AUTHOR chose as its sources
+   *   — the files the page is actually about — or NULL for the default
+   *   selection (identity files first, then src/, capped at MAX_SOURCES).
+   *   Each chosen path must be in the factsheet's inventory, where its hash
+   *   comes from; the list is kept in the author's order and is not capped:
+   *   the handful is the author's call, and the freshness gate then guards
+   *   exactly the files the page's claims rest on. Round 30 (T26) carried a
+   *   page whose six default sources omitted the component files carrying
+   *   its sharpest claims, with no way to say otherwise.
    *
    * @return string
    *   The full page text: an OKF frontmatter fence followed by the body.
    *
    * @throws \Droost\Engine\Wiki\ComposeException
    *   When the factsheet lacks the provenance template, no source survives
-   *   selection, or the assembled page fails the real parse/validate contract.
+   *   selection, a chosen path is not in the inventory, or the assembled page
+   *   fails the real parse/validate contract.
    */
-  public function compose(string $module, array $factsheet, string $body, string $commit, ?string $timestamp = NULL): string {
-    $template = $factsheet['provenance_template'] ?? NULL;
-    if (!is_array($template)) {
-      throw new ComposeException(sprintf('factsheet for "%s" has no provenance_template', $module));
-    }
-    $sources = self::selectSources($template['sources'] ?? NULL, $module, $this->primaryDoc($factsheet));
+  public function compose(string $module, array $factsheet, string $body, string $commit, ?string $timestamp = NULL, ?array $chosen = NULL): string {
+    $sources = $this->selection($module, $factsheet, $chosen)['sources'];
     if ($sources === []) {
       throw new ComposeException(sprintf('factsheet for "%s" lists no usable sources', $module));
     }
+    $template = $factsheet['provenance_template'] ?? [];
+    $template = is_array($template) ? $template : [];
 
     $identity = is_array($factsheet['identity'] ?? NULL) ? $factsheet['identity'] : [];
     $label = $this->scalarString($identity['label'] ?? NULL) ?? $module;
@@ -104,6 +113,122 @@ final readonly class PageComposer {
     $page = "---\n" . Yaml::encode($frontmatter) . "---\n\n" . self::stripFrontmatter($body);
     $this->validate($page);
     return $page;
+  }
+
+  /**
+   * The sources a page would record, and the inventory paths left out.
+   *
+   * Public so the surfaces that write pages can SHOW the selection: the
+   * default trim used to be invisible — a page recorded six files and nobody
+   * could see which of the module's inventory it had dropped, or ask for
+   * others. With `$chosen` the author's own list is used (validated against
+   * the inventory for the hash, kept in the author's order, uncapped); without
+   * it the default selection applies and `omitted` names what it left out so
+   * the author can decide whether that matters.
+   *
+   * @param string $module
+   *   The module machine name.
+   * @param array<string, mixed> $factsheet
+   *   The factsheet packet (its provenance_template.sources is the inventory).
+   * @param list<string>|null $chosen
+   *   The author's chosen paths, or NULL for the default selection.
+   *
+   * @return array{sources: array<int, array{path: string, hash: string}>, omitted: list<string>}
+   *   The sources to record, and the inventory paths not recorded.
+   *
+   * @throws \Droost\Engine\Wiki\ComposeException
+   *   When the factsheet lacks the provenance template, or a chosen path is
+   *   not in the inventory.
+   */
+  public function selection(string $module, array $factsheet, ?array $chosen = NULL): array {
+    $template = $factsheet['provenance_template'] ?? NULL;
+    if (!is_array($template)) {
+      throw new ComposeException(sprintf('factsheet for "%s" has no provenance_template', $module));
+    }
+    $inventory = self::inventory($template['sources'] ?? NULL);
+    $selected = $chosen === NULL
+      ? self::selectSources($template['sources'] ?? NULL, $module, $this->primaryDoc($factsheet))
+      : self::chosenSources($chosen, $inventory, $module);
+    $kept = array_column($selected, 'path');
+    $omitted = [];
+    foreach (array_keys($inventory) as $path) {
+      if (!in_array($path, $kept, TRUE)) {
+        $omitted[] = $path;
+      }
+    }
+    return ['sources' => $selected, 'omitted' => $omitted];
+  }
+
+  /**
+   * The inventory as path → hash, dropping malformed entries.
+   *
+   * @param mixed $sources
+   *   The factsheet provenance_template.sources.
+   *
+   * @return array<string, string>
+   *   Path to hash, in inventory order.
+   */
+  private static function inventory(mixed $sources): array {
+    $inventory = [];
+    foreach (is_array($sources) ? $sources : [] as $entry) {
+      if (!is_array($entry)) {
+        continue;
+      }
+      $path = $entry['path'] ?? NULL;
+      $hash = $entry['hash'] ?? NULL;
+      if (is_string($path) && is_string($hash)) {
+        $inventory[$path] = $hash;
+      }
+    }
+    return $inventory;
+  }
+
+  /**
+   * The author's chosen sources, each with its hash from the inventory.
+   *
+   * @param list<string> $chosen
+   *   The chosen project-root-relative paths.
+   * @param array<string, string> $inventory
+   *   Path to hash.
+   * @param string $module
+   *   The module, for the message.
+   *
+   * @return array<int, array{path: string, hash: string}>
+   *   The sources, in the author's order, duplicates dropped.
+   *
+   * @throws \Droost\Engine\Wiki\ComposeException
+   *   When a chosen path is not in the inventory — a hash cannot be invented,
+   *   and a page that named a file it never measured would be the false
+   *   freshness this whole scheme exists to prevent.
+   */
+  private static function chosenSources(array $chosen, array $inventory, string $module): array {
+    $sources = [];
+    $seen = [];
+    $unknown = [];
+    foreach ($chosen as $path) {
+      if (!is_string($path) || trim($path) === '') {
+        continue;
+      }
+      $path = trim($path);
+      if (isset($seen[$path])) {
+        continue;
+      }
+      $seen[$path] = TRUE;
+      if (!isset($inventory[$path])) {
+        $unknown[] = $path;
+        continue;
+      }
+      $sources[] = ['path' => $path, 'hash' => $inventory[$path]];
+    }
+    if ($unknown !== []) {
+      throw new ComposeException(sprintf(
+        'chosen source(s) not in the factsheet inventory for "%s": %s — a source must be a file the factsheet measured (inventory: %s)',
+        $module,
+        implode(', ', $unknown),
+        implode(', ', array_keys($inventory)),
+      ));
+    }
+    return $sources;
   }
 
   /**

@@ -127,6 +127,78 @@ final class PageComposerTest extends TestCase {
   }
 
   /**
+   * The author's chosen sources are recorded as given: their order, uncapped.
+   *
+   * Round 30 (T26): a component page's six default sources omitted the twig,
+   * css and component.yml carrying its sharpest claims, and the author had no
+   * way to say otherwise.
+   */
+  public function testChosenSourcesAreRecordedInOrderAndUncapped(): void {
+    $factsheet = $this->factsheet([
+      ['path' => 'foo/foo.info.yml', 'hash' => 'xxh3:1111111111111111'],
+      ['path' => 'foo/src/A.php', 'hash' => 'xxh3:aaaaaaaaaaaaaaaa'],
+      ['path' => 'foo/src/B.php', 'hash' => 'xxh3:bbbbbbbbbbbbbbbb'],
+      ['path' => 'foo/components/bar/bar.twig', 'hash' => 'xxh3:cccccccccccccccc'],
+      ['path' => 'foo/components/bar/bar.css', 'hash' => 'xxh3:dddddddddddddddd'],
+      ['path' => 'foo/components/bar/bar.component.yml', 'hash' => 'xxh3:eeeeeeeeeeeeeeee'],
+      ['path' => 'foo/config/optional/block.block.bar.yml', 'hash' => 'xxh3:ffffffffffffffff'],
+      ['path' => 'foo/tests/src/Kernel/BarTest.php', 'hash' => 'xxh3:0000000000000000'],
+    ]);
+    $chosen = [
+      'foo/components/bar/bar.twig',
+      'foo/components/bar/bar.component.yml',
+      'foo/components/bar/bar.css',
+      'foo/config/optional/block.block.bar.yml',
+      'foo/src/A.php',
+      'foo/foo.info.yml',
+      'foo/tests/src/Kernel/BarTest.php',
+    ];
+
+    $meta = $this->parser->parse($this->composer->compose('foo', $factsheet, "# Foo\n", '', NULL, $chosen));
+
+    $this->assertNotNull($meta->provenance);
+    $this->assertSame($chosen, array_column($meta->provenance->sources, 'path'), 'the author\'s list, in the author\'s order, seven long');
+    $this->assertSame('xxh3:cccccccccccccccc', $meta->provenance->sources[0]['hash'], 'hashes come from the inventory');
+
+    $selection = $this->composer->selection('foo', $factsheet, $chosen);
+    $this->assertSame(['foo/src/B.php'], $selection['omitted'], 'the one inventory file the author left out is named');
+  }
+
+  /**
+   * The default selection names what it omitted, so the author can decide.
+   */
+  public function testDefaultSelectionNamesTheOmitted(): void {
+    $factsheet = $this->factsheet([
+      ['path' => 'foo/src/A.php', 'hash' => 'xxh3:aaaaaaaaaaaaaaaa'],
+      ['path' => 'foo/src/B.php', 'hash' => 'xxh3:bbbbbbbbbbbbbbbb'],
+      ['path' => 'foo/src/C.php', 'hash' => 'xxh3:cccccccccccccccc'],
+      ['path' => 'foo/src/D.php', 'hash' => 'xxh3:dddddddddddddddd'],
+      ['path' => 'foo/foo.info.yml', 'hash' => 'xxh3:1111111111111111'],
+      ['path' => 'foo/components/bar/bar.twig', 'hash' => 'xxh3:2222222222222222'],
+      ['path' => 'foo/src/E.php', 'hash' => 'xxh3:eeeeeeeeeeeeeeee'],
+      ['path' => 'foo/src/F.php', 'hash' => 'xxh3:ffffffffffffffff'],
+    ]);
+
+    $selection = $this->composer->selection('foo', $factsheet);
+
+    $this->assertCount(PageComposer::MAX_SOURCES, $selection['sources']);
+    $this->assertSame(['foo/components/bar/bar.twig', 'foo/src/F.php'], $selection['omitted'], 'the trim is visible: the component file and the sixth class fell off');
+  }
+
+  /**
+   * A chosen path the factsheet never measured is refused by name.
+   */
+  public function testChosenSourceOutsideTheInventoryIsRefused(): void {
+    $factsheet = $this->factsheet([
+      ['path' => 'foo/foo.info.yml', 'hash' => 'xxh3:1111111111111111'],
+    ]);
+
+    $this->expectException(ComposeException::class);
+    $this->expectExceptionMessage('chosen source(s) not in the factsheet inventory for "foo": foo/src/Ghost.php');
+    $this->composer->compose('foo', $factsheet, "# Foo\n", '', NULL, ['foo/foo.info.yml', 'foo/src/Ghost.php']);
+  }
+
+  /**
    * An empty timestamp/commit still composes a valid page.
    */
   public function testEmptyCommitIsValid(): void {

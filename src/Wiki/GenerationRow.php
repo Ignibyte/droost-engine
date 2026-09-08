@@ -28,6 +28,10 @@ final readonly class GenerationRow {
    *   The written page path on success, else NULL.
    * @param string|null $message
    *   A human-readable detail for a refusal/failure, else NULL.
+   * @param list<string> $omitted
+   *   On success, the module's inventory files the page's provenance does NOT
+   *   record — what the default selection trimmed, or what the author left
+   *   out — so a surface can show the selection instead of hiding it.
    */
   public function __construct(
     public string $module,
@@ -35,6 +39,7 @@ final readonly class GenerationRow {
     public string $verdict,
     public ?string $path,
     public ?string $message,
+    public array $omitted = [],
   ) {}
 
   /**
@@ -44,12 +49,14 @@ final readonly class GenerationRow {
    *   The module machine name.
    * @param string $path
    *   The written page path.
+   * @param list<string> $omitted
+   *   The inventory files the page's provenance does not record.
    *
    * @return self
    *   The row.
    */
-  public static function wrote(string $module, string $path): self {
-    return new self($module, 'wrote', 'fresh', $path, NULL);
+  public static function wrote(string $module, string $path, array $omitted = []): self {
+    return new self($module, 'wrote', 'fresh', $path, NULL, $omitted);
   }
 
   /**

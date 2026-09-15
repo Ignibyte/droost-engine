@@ -39,8 +39,8 @@ final readonly class FrontmatterParser {
     catch (ExceptionInterface $e) {
       // Malformed YAML: fail-closed only when the page claims provenance.
       // The \s* tolerates "droost :" (legal YAML spacing) — PARITY-CRITICAL
-      // with gate-wiki.php's identical textual probe in drup-pipeline: both
-      // checkers must attribute a malformed page the same way.
+      // with gate-wiki.php's identical textual probe in the enterprise twin:
+      // both checkers must attribute a malformed page the same way.
       if (preg_match('/^droost\s*:/m', $frontmatter) === 1) {
         return PageMeta::invalid('frontmatter is not valid YAML: ' . $e->getMessage(), $body);
       }

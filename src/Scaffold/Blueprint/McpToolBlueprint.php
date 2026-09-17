@@ -47,12 +47,13 @@ final class McpToolBlueprint extends AbstractBlueprint {
     $label = $context->input('label', $class);
     $description = $context->input('description', $label . '. Read-only.');
 
-    // DroostToolBase lives in Drupal\droost\Plugin\Tool. When scaffolding into
-    // droost itself the generated class shares that namespace, so importing it
-    // would be a redundant (and phpcs-flagged) self-import.
+    // DroostToolBase lives in Drupal\droost\Plugin\mcp_server\Tool — the
+    // directory mcp_server 2.0.0-beta3 discovers tools in. When scaffolding
+    // into droost itself the generated class shares that namespace, so
+    // importing it would be a redundant (and phpcs-flagged) self-import.
     $useBase = $context->module === 'droost'
       ? ''
-      : "use Drupal\\droost\\Plugin\\Tool\\DroostToolBase;\n";
+      : "use Drupal\\droost\\Plugin\\mcp_server\\Tool\\DroostToolBase;\n";
     // The label reaches two sites: PHP string literals (escaped via phpString)
     // and a docblock comment (neutralised via docText so a "*/" in the label
     // cannot terminate the comment and inject top-level code).
@@ -67,7 +68,7 @@ final class McpToolBlueprint extends AbstractBlueprint {
     ];
     $this->writeFile(
       $context,
-      $context->modulePath . '/src/Plugin/Tool/' . $class . '.php',
+      $context->modulePath . '/src/Plugin/mcp_server/Tool/' . $class . '.php',
       strtr($this->toolTemplate(), $tokens),
       $result,
     );
@@ -91,7 +92,7 @@ final class McpToolBlueprint extends AbstractBlueprint {
 
     declare(strict_types=1);
 
-    namespace Drupal\{{module}}\Plugin\Tool;
+    namespace Drupal\{{module}}\Plugin\mcp_server\Tool;
 
     use Drupal\Core\StringTranslation\TranslatableMarkup;
     {{use_base}}use Drupal\mcp_server\Attribute\Tool;

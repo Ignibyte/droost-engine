@@ -1,6 +1,6 @@
 {
     "name": "droost/engine",
-    "description": "Framework-free engine behind Droost: QA verify loop, AI-harness installers, guidelines/skills corpus services, scaffold blueprints, OKF wiki core, and code search/graph core for Drupal projects.",
+    "description": "Framework-free engine behind Droost: QA verify loop, AI-harness installers, skill emitters, scaffold blueprints, OKF wiki core, and code search/graph core for Drupal projects.",
     "type": "library",
     "license": "GPL-2.0-or-later",
     "require": {

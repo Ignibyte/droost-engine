@@ -14,7 +14,7 @@ use Droost\Engine\Scaffold\ScaffoldResult;
  * Droost's value-add over DCG, whose `hook` generator only emits a procedural
  * `function <module>_<hook>()` in the .module file. This writes a service-style
  * class under src/Hook/ with a `#[Hook('<name>')]` method (ready for
- * constructor dependency injection), matching guidelines/topics/hooks-oop.md,
+ * constructor dependency injection), the Drupal 11.1+ way of declaring hooks,
  * plus a reflection unit test that the attribute is wired. Green-by-default:
  * phpcs + phpstan-max with an empty baseline.
  *

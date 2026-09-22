@@ -7,8 +7,8 @@ namespace Droost\Engine\Harness;
 /**
  * Owns AGENTS.md — the single source of truth all other harness files point at.
  *
- * Writes the full guidelines block (the brain directive + version-stamped
- * conventions + topic list). Always runs, before the pointer writers.
+ * Writes the droost block — what droost is, stamped with the site's core
+ * version. Always runs, before the pointer writers.
  */
 final class AgentsHarnessInstaller extends AbstractHarnessInstaller {
 
@@ -38,9 +38,6 @@ final class AgentsHarnessInstaller extends AbstractHarnessInstaller {
    * {@inheritdoc}
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
-    if (!$context->writesGuidelines()) {
-      return;
-    }
     $this->upsertMarkdown($root, 'AGENTS.md', $context->blockBody, $result);
   }
 

@@ -35,9 +35,7 @@ final class QwenHarnessInstaller extends AbstractHarnessInstaller {
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
     $this->upsertJsonServer($root, '.qwen/settings.json', 'mcpServers', $context, $result);
-    if ($context->writesGuidelines()) {
-      $this->upsertMarkdown($root, 'QWEN.md', $this->sentencePointer(), $result);
-    }
+    $this->upsertMarkdown($root, 'QWEN.md', $this->sentencePointer(), $result);
   }
 
   /**

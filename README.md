@@ -4,8 +4,8 @@ The framework-free engine behind [Droost](https://www.drupal.org/project/droost)
 
 Droost is a developer-acceleration toolkit for AI coding agents working on
 Drupal. Most of what it does is not actually Drupal-specific: running a QA
-verify loop, writing AI-harness config files, reading a guidelines corpus,
-generating scaffolds, composing wiki pages, indexing code. This package is that
+verify loop, writing AI-harness config files, generating scaffolds, composing
+wiki pages, indexing code. This package is that
 half — plain PHP with no Drupal dependency — so the same logic can serve the
 Drupal module, a standalone CLI, and repo-only tooling that has no installed
 site to boot.
@@ -17,7 +17,7 @@ Areas (each depends only on `Support` and `Site`, never on a sibling):
 | `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
 | `Site` | What the engine may know about the site it runs against: the extension-locator port and the no-site implementation | yes |
 | `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
-| `Guidelines` / `Skills` | Guidelines corpus reader and skill emitters | yes |
+| `Skills` | Skill emitters: droost's own skill files rendered as SKILL.md | yes |
 | `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
 | `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
 | `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
@@ -49,12 +49,13 @@ has. Its `isInstalled()` returns `true`, `false`, **or `null`** — because the
 engine runs both inside a booted site, where absence is a fact, and against a
 bare checkout, where it is not knowable.
 
-That distinction is load-bearing rather than fussy. "Not installed" prunes: it
-drops a topic from the guidelines catalog, so it never becomes a skill, so it
-never reaches the agent. Letting `null` collapse into `false` would make a
-plain checkout silently report half a corpus, and guidance that is missing
-looks exactly like guidance that was never written. `Site\UnknownSite` answers
-`null` to everything, and callers are contracted to read that as "show it".
+That distinction is load-bearing rather than fussy: letting `null` collapse
+into `false` makes a plain checkout report as missing what is merely
+unknowable, and a missing answer looks exactly like a negative one.
+`Site\UnknownSite` answers `null` to everything, and callers are contracted to
+read that as "cannot tell", never as "not installed". Since 0.7.0 the engine
+itself reads only `coreVersion()` from the port; the guideline catalogue that
+pruned on `isInstalled()` is gone.
 
 ## Status
 
@@ -92,6 +93,19 @@ and `Graph\YamlGraphExtractor`, index diffing, and the embedding and
 vector-store interfaces. The storage layer stays in the module for now — four
 classes built on Drupal's database API, which need a port of their own before
 they can move (B5b).
+
+**0.7.0** removes the guidance tranche. `Guidelines\GuidelineProvider` is gone
+— its one non-guidance job, `deriveMajor()`, is now `Support\CoreVersion::major()`
+— and `Skills\SkillProvider` lists only the consumer's own skill files instead
+of rendering every guideline topic as a `drupal-*` skill. The harness writes the
+AGENTS.md block (`Harness\DroostBlock`, what droost is) and every editor's
+pointer to it unconditionally: `InstallContext` loses `guidelinesMode`, because
+those files are also how a build pipeline's own AGENTS.md block reaches the
+agent, and a switch that could cut that road silently is not one worth keeping.
+The Claude installer now sweeps retired droost skills — only directories it
+provably wrote and nobody has touched since — and its sentinel records the
+SKILL.md hash so later sweeps can keep an edited skill. Breaking, hence the
+minor.
 
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 

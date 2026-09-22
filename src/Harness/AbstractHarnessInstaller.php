@@ -182,7 +182,7 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
    *   The pointer body.
    */
   protected function importPointer(): string {
-    return "Droost guidelines are maintained in AGENTS.md (imported below).\n\n@AGENTS.md";
+    return "Droost's project brain and build pipeline are described in AGENTS.md (imported below).\n\n@AGENTS.md";
   }
 
   /**
@@ -192,7 +192,7 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
    *   The pointer body.
    */
   protected function sentencePointer(): string {
-    return 'Follow the Droost project guidelines in `./AGENTS.md`.';
+    return 'Follow the Droost project brain and build pipeline described in `./AGENTS.md`.';
   }
 
   /**

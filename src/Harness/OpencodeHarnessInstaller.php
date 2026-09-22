@@ -56,13 +56,11 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
       'command' => [$context->command, ...$context->args],
       'enabled' => TRUE,
     ]);
-    if ($context->writesGuidelines()) {
-      $instructions = (isset($data['instructions']) && is_array($data['instructions'])) ? $data['instructions'] : [];
-      if (!in_array(self::AGENTS_POINTER, $instructions, TRUE)) {
-        $instructions[] = self::AGENTS_POINTER;
-      }
-      $data['instructions'] = array_values($instructions);
+    $instructions = (isset($data['instructions']) && is_array($data['instructions'])) ? $data['instructions'] : [];
+    if (!in_array(self::AGENTS_POINTER, $instructions, TRUE)) {
+      $instructions[] = self::AGENTS_POINTER;
     }
+    $data['instructions'] = array_values($instructions);
     $this->write($root, 'opencode.json', JsonMerge::encode($data));
     $result->addWritten('opencode.json');
   }

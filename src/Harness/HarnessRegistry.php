@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Harness;
 
-use Droost\Engine\Guidelines\GuidelineProvider;
-
 /**
  * Resolves and runs the set of harness installers for an install/uninstall.
  *
@@ -24,13 +22,13 @@ final class HarnessRegistry {
   /**
    * Constructs a HarnessRegistry.
    *
-   * @param \Droost\Engine\Guidelines\GuidelineProvider $guidelines
-   *   The guideline provider (supplies the block body).
+   * @param \Droost\Engine\Harness\DroostBlock $block
+   *   What droost is (supplies the AGENTS.md block body).
    * @param \Droost\Engine\Harness\HarnessInstallerInterface ...$installers
    *   The available harness installers.
    */
   public function __construct(
-    private readonly GuidelineProvider $guidelines,
+    private readonly DroostBlock $block,
     HarnessInstallerInterface ...$installers,
   ) {
     foreach ($installers as $installer) {
@@ -104,7 +102,7 @@ final class HarnessRegistry {
   }
 
   /**
-   * Installs the MCP server + guidance across the resolved harnesses.
+   * Installs the MCP server + the droost block across the resolved harnesses.
    *
    * @param string $root
    *   The project root.
@@ -112,18 +110,15 @@ final class HarnessRegistry {
    *   The MCP server launch command + args.
    * @param string $harness
    *   The harness selection (auto|all|csv).
-   * @param string $guidelinesMode
-   *   One of block, pointer, or none.
    *
    * @return \Droost\Engine\Harness\InstallResult
    *   The aggregated result.
    */
-  public function install(string $root, array $server, string $harness, string $guidelinesMode): InstallResult {
+  public function install(string $root, array $server, string $harness): InstallResult {
     $context = new InstallContext(
       $server['command'],
       $server['args'],
-      $guidelinesMode,
-      $this->guidelines->getGuidelinesBlockBody(),
+      $this->block->body(),
     );
     $result = new InstallResult();
     foreach ($this->ordered($this->resolve($harness, $root)) as $installer) {

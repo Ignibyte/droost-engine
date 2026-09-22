@@ -35,9 +35,7 @@ final class GeminiHarnessInstaller extends AbstractHarnessInstaller {
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
     $this->upsertJsonServer($root, '.gemini/settings.json', 'mcpServers', $context, $result);
-    if ($context->writesGuidelines()) {
-      $this->upsertMarkdown($root, 'GEMINI.md', $this->sentencePointer(), $result);
-    }
+    $this->upsertMarkdown($root, 'GEMINI.md', $this->sentencePointer(), $result);
   }
 
   /**

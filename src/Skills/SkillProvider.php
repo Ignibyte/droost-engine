@@ -4,20 +4,14 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Skills;
 
-use Droost\Engine\Guidelines\GuidelineProvider;
-
 /**
  * Lists the harness-neutral skills for the per-harness renderers.
  *
- * Skills come from two sources, with no content duplication: dedicated skill
- * files under `guidelines/skills/*.md` (frontmatter `name` + `description`),
- * and the existing deep-dive topics (each surfaced as a `drupal-<topic>` skill
- * whose trigger is the topic's one-line summary).
- *
- * Riding the topics rather than copying them is what keeps the two corpora
- * from drifting — and it means skills inherit the guideline catalog's site
- * scoping for free: a site without media never gets a media skill written to
- * its harness.
+ * Skills are the dedicated skill files droost ships (`<skillsDir>/*.md`,
+ * frontmatter `name` + `description`), and nothing else. Until 0.7.0 every
+ * guideline topic was also surfaced as a `drupal-<topic>` skill; droost no
+ * longer ships guidance, and across the measured runs no agent ever opened
+ * one of those skills.
  */
 final readonly class SkillProvider {
 
@@ -26,28 +20,28 @@ final readonly class SkillProvider {
    *
    * @param string $skillsDir
    *   Absolute path to the dedicated skill files directory.
-   * @param \Droost\Engine\Guidelines\GuidelineProvider $guidelines
-   *   The guideline provider (supplies topic content).
    */
   public function __construct(
     private string $skillsDir,
-    private GuidelineProvider $guidelines,
   ) {}
 
   /**
    * Returns every renderable skill.
    *
+   * An empty list is a real answer only when the directory holds no skill
+   * files; `glob()` also returns nothing for a directory that does not
+   * exist. Callers that act on "nothing to emit" — the Claude installer's
+   * stale-skill sweep — refuse to, for exactly that reason.
+   *
    * @return array<int, \Droost\Engine\Skills\Skill>
-   *   The skills (dedicated skill files first, then topic-derived skills).
+   *   The skills, in file-name order.
    */
   public function getSkills(): array {
     $skills = [];
-    foreach (glob($this->skillsDir . '/*.md') ?: [] as $path) {
+    $paths = glob($this->skillsDir . '/*.md') ?: [];
+    sort($paths);
+    foreach ($paths as $path) {
       $skills[] = $this->parse((string) file_get_contents($path), basename($path, '.md'));
-    }
-    foreach ($this->guidelines->listTopics() as $topic) {
-      $body = $this->guidelines->getTopic($topic['name']) ?? '';
-      $skills[] = new Skill('drupal-' . $topic['name'], $topic['summary'], $body);
     }
     return $skills;
   }

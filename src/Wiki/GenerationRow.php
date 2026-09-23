@@ -19,7 +19,8 @@ final readonly class GenerationRow {
    * @param string $module
    *   The target module machine name.
    * @param string $action
-   *   What happened: 'wrote', 'refused', or 'failed'.
+   *   What happened: 'wrote', 'unchanged' (the page already said exactly
+   *   this, so nothing was written), 'refused', or 'failed'.
    * @param string $verdict
    *   The freshness verdict on success ('fresh'), or the reason token on a
    *   refusal/failure (e.g. 'not-installed', 'no-provider', 'foreign',
@@ -60,6 +61,26 @@ final readonly class GenerationRow {
   }
 
   /**
+   * A regeneration that would have written what the page already says.
+   *
+   * Nothing is written, so the page's timestamp and git history do not
+   * churn over a factsheet that has not changed.
+   *
+   * @param string $module
+   *   The module machine name.
+   * @param string $path
+   *   The page path, as it stands.
+   * @param list<string> $omitted
+   *   The inventory files the page's provenance does not record.
+   *
+   * @return self
+   *   The row.
+   */
+  public static function unchanged(string $module, string $path, array $omitted = []): self {
+    return new self($module, 'unchanged', 'fresh', $path, NULL, $omitted);
+  }
+
+  /**
    * A refusal (a precondition was not met; nothing written).
    *
    * @param string $module
@@ -94,13 +115,13 @@ final readonly class GenerationRow {
   }
 
   /**
-   * Whether the page was written and verified fresh.
+   * Whether the page stands fresh, written now or already right.
    *
    * @return bool
    *   TRUE when the action succeeded.
    */
   public function ok(): bool {
-    return $this->action === 'wrote';
+    return $this->action === 'wrote' || $this->action === 'unchanged';
   }
 
 }

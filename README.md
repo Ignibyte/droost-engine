@@ -155,6 +155,23 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**0.7.6** is the wiki at scale:
+- `Wiki\PageRenderer` writes a page body from a factsheet alone, with no
+  model. The same factsheet renders the same bytes, and a section nobody
+  could measure says why.
+- `GenerationRow::unchanged()` reports a regeneration that would write what a
+  page already says.
+- `PageComposer::compose()` records which writer made the body
+  (`droost:wiki:generate`, `droost:wiki:write` or `droost:wiki:render`) and
+  types a theme's page as a `Drupal Theme`.
+
+It also has two fixes:
+- A hook an api.php documents is a `hook:NAME` symbol owned by its module,
+  so an implementation's edge reaches a module rather than nothing.
+  `RepoIndexer::INDEXER_VERSION` is 3.
+- The kernel-test and functional-test blueprints keep a class name that
+  already ends in `Test`.
+
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 
 ## Install

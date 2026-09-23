@@ -53,7 +53,11 @@ final class FunctionalTestBlueprint extends AbstractBlueprint {
     if ($id === '' || $class === '') {
       throw new \InvalidArgumentException('Could not derive a valid id and class from the inputs. Pass --id (a-z, 0-9, _) and optionally --class (a valid PHP class name).');
     }
-    $class .= 'Test';
+    // A class already named for its test keeps its name: P6 run 5 passed
+    // RecipientSelectionTest and was given RecipientSelectionTestTest.php.
+    if (!str_ends_with($class, 'Test')) {
+      $class .= 'Test';
+    }
 
     $theme = $this->machineName($context->input('theme', 'stark'));
     if ($theme === '' || preg_match('/^[a-z][a-z0-9_]*$/', $theme) !== 1) {

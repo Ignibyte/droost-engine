@@ -50,7 +50,11 @@ final class KernelTestBlueprint extends AbstractBlueprint {
     if ($id === '' || $class === '') {
       throw new \InvalidArgumentException('Could not derive a valid id and class from the inputs. Pass --id (a-z, 0-9, _) and optionally --class (a valid PHP class name).');
     }
-    $class .= 'Test';
+    // A class already named for its test keeps its name: P6 run 5 passed
+    // RecipientSelectionTest and was given RecipientSelectionTestTest.php.
+    if (!str_ends_with($class, 'Test')) {
+      $class .= 'Test';
+    }
 
     $modules = $this->moduleList($context->input('modules', ''), $context->module);
     $tokens = [

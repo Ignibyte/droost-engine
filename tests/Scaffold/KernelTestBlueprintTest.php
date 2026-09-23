@@ -118,6 +118,16 @@ final class KernelTestBlueprintTest extends TestCase {
   }
 
   /**
+   * A class already ending in Test keeps its name.
+   */
+  public function testClassNamedForItsTestIsNotSuffixedTwice(): void {
+    $result = $this->generate(['id' => 'thing', 'class' => 'RecipientSelectionTest']);
+    $this->assertContains('modules/mymod/tests/src/Kernel/RecipientSelectionTest.php', $result->created);
+    $source = (string) file_get_contents($this->appRoot . '/modules/mymod/tests/src/Kernel/RecipientSelectionTest.php');
+    $this->assertStringContainsString('final class RecipientSelectionTest extends', $source);
+  }
+
+  /**
    * Inputs that sanitise to an empty id are rejected, not written.
    */
   public function testEmptyDerivedIdThrows(): void {

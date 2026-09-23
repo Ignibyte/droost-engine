@@ -100,25 +100,33 @@ PHP;
   }
 
   /**
-   * A class in either branch of a version check, or in a function, is neither.
+   * Only a declaration guarded by its own absence is a fallback.
    *
-   * Each one exists only once some code has run, so none of them is the
-   * definition a reference resolves to.
+   * 0.7.2 skipped every conditional declaration, and a full rebuild of a real
+   * site showed what that cost: webform declares WebformManagedFileBase in
+   * both branches of a feature check, and easy_email_theme declares a
+   * preprocess hook only while symfony_mailer is on. Both are the real, and
+   * only, declaration of their name. What makes a declaration a stand-in is
+   * the guard `if (!class_exists('X')) { class X … }`: it exists only when the
+   * real X does not.
    */
-  public function testEveryConditionalDeclarationIsSkipped(): void {
+  public function testOnlySelfGuardedDeclarationIsSkipped(): void {
     $code = <<<'PHP'
 <?php
 
 namespace Drupal\fx;
 
-if (PHP_VERSION_ID >= 80400) {
-  class Modern extends Base {}
-}
-elseif (PHP_VERSION_ID >= 80300) {
-  class Middle extends Base {}
+use Drupal\Core\Render\Element\ManagedFile;
+
+if (class_exists(ManagedFile::class)) {
+  abstract class FileBase extends ManagedFile {}
 }
 else {
-  class Legacy extends Base {}
+  abstract class FileBase extends Base {}
+}
+
+if (\Drupal::moduleHandler()->moduleExists('mailer')) {
+  function fx_preprocess_email(array &$variables): void {}
 }
 
 if (!function_exists('Drupal\fx\t')) {
@@ -127,14 +135,33 @@ if (!function_exists('Drupal\fx\t')) {
   }
 }
 
+if (!class_exists(Legacy::class)) {
+  class Legacy {}
+}
+
+if (!interface_exists('\Drupal\fx\Named')) {
+  interface Named {}
+}
+
 function define_late(): void {
   class Late {}
 }
 PHP;
     $result = (new PhpGraphExtractor())->extract($code, 'modules/custom/fx/fx.module', 'fx');
 
-    $this->assertSame(['Drupal\fx\define_late'], array_column($result['symbols'], 'fqcn'));
-    $this->assertSame([], $result['edges']);
+    $this->assertSame(
+      [
+        'Drupal\fx\FileBase',
+        'Drupal\fx\FileBase',
+        'Drupal\fx\fx_preprocess_email',
+        'Drupal\fx\define_late',
+        'Drupal\fx\Late',
+      ],
+      array_column($result['symbols'], 'fqcn'),
+      'a feature check, a module check and a function body are real declarations; the three self-guarded ones are not',
+    );
+    $edges = array_map(static fn(array $e): string => $e['src'] . '|' . $e['dst'] . '|' . $e['kind'], $result['edges']);
+    $this->assertNotContains('Drupal\fx\t|Drupal\fx\Translator|calls', $edges, 'a stand-in sources no edge');
   }
 
 }

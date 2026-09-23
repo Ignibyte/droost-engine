@@ -33,9 +33,10 @@ final class RepoIndexer {
    *
    * Kept as its own constant rather than shared with the Drupal indexer: the
    * two write different corpora, and coupling their versions would force
-   * pointless rebuilds on one when the other's chunkers change.
+   * pointless rebuilds on one when the other's chunkers change. v2: a
+   * declaration guarded by its own absence is no longer a symbol (F-63).
    */
-  public const int INDEXER_VERSION = 1;
+  public const int INDEXER_VERSION = 2;
 
   /**
    * Constructs a RepoIndexer.

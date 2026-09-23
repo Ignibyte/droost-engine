@@ -131,6 +131,15 @@ project_browser's fixture script declares `class Drupal` when
 every custom module that calls `\Drupal`. `PhpGraphExtractor` now runs
 `ParentConnectingVisitor`, which `GraphVisitor` expects.
 
+**0.7.3** narrows that rule to what it was for. Only a declaration guarded by
+its own absence, `if (!class_exists('X')) { class X … }` (or the interface,
+trait, enum or function form), is skipped. 0.7.2 skipped every conditional
+declaration, and a full rebuild of a real site showed the cost: webform's
+`WebformManagedFileBase`, declared in both branches of a feature check, and a
+theme's preprocess hook, declared only while a module is on, dropped out of
+the graph although each is the only declaration of its name.
+`RepoIndexer::INDEXER_VERSION` is 2, so a repository index rebuilds itself.
+
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 
 ## Install

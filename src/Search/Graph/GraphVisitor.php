@@ -6,7 +6,12 @@ namespace Droost\Engine\Search\Graph;
 
 use PhpParser\Node;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\ClassConstFetch;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
@@ -15,11 +20,10 @@ use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\Function_;
+use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
-use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\VariadicPlaceholder;
@@ -39,14 +43,16 @@ use PhpParser\NodeVisitorAbstract;
  * so a declaration's enclosing statements are known. Instance-method / DI
  * call resolution (which needs type inference) is intentionally out of scope.
  *
- * Only an unconditional declaration is a symbol. A class or function declared
- * inside an `if`, a loop or a function body exists only once that code has
- * run, and is almost always a fallback for the real one declared elsewhere:
- * project_browser's fixture script declares `class Drupal` when
- * `!class_exists('Drupal')`. The index carries no core, so recording that
- * stand-in made it the owner of every `\Drupal::` call in the codebase
- * (F-63). A conditional declaration is kept as edge-source context only, as
- * an anonymous class is, so it neither claims a name nor sources an edge.
+ * A declaration guarded by its own absence is not a symbol. project_browser's
+ * fixture script declares `class Drupal` inside `if (!class_exists('Drupal'))`:
+ * a stand-in that exists only when the real one does not. The index carries
+ * no core, so recording it made the stand-in the owner of every `\Drupal::`
+ * call in the codebase (F-63). Such a declaration is kept as edge-source
+ * context only, as an anonymous class is, so it neither claims a name nor
+ * sources an edge. Every other conditional declaration is real: webform
+ * declares a base class in both branches of a feature check, and a theme
+ * declares a hook only while a module is on. 0.7.2 skipped those too, and a
+ * full rebuild of a real site showed the cost.
  */
 final class GraphVisitor extends NodeVisitorAbstract {
 
@@ -102,7 +108,8 @@ final class GraphVisitor extends NodeVisitorAbstract {
       $this->enterClassLike($node);
     }
     elseif ($node instanceof Function_) {
-      $fqcn = self::declaredConditionally($node) ? '' : ($node->namespacedName?->toString() ?? '');
+      $fqcn = $node->namespacedName?->toString() ?? '';
+      $fqcn = self::declaredAsFallback($node, $fqcn) ? '' : $fqcn;
       $this->pushSymbol($fqcn, 'function', $node->getStartLine());
       $this->hookAttributeEdges($fqcn, $node->attrGroups);
       $this->proceduralHookEdge($fqcn, $node->name->toString());
@@ -264,8 +271,7 @@ final class GraphVisitor extends NodeVisitorAbstract {
       // descended into and resolved the deriver attribute's argument to a
       // fully-qualified name. On enter it is still the bare short name
       // ("SemDeriver" rather than "Drupal\...\SemDeriver"). The name is the
-      // one enterClassLike() pushed, which is '' for a conditional
-      // declaration.
+      // one enterClassLike() pushed, which is '' for a stand-in.
       $fqcn = $this->top($this->classStack);
       if ($fqcn !== '') {
         $this->deriverEdges($fqcn, $node->attrGroups);
@@ -286,7 +292,8 @@ final class GraphVisitor extends NodeVisitorAbstract {
    *   The class-like node.
    */
   private function enterClassLike(ClassLike $node): void {
-    $fqcn = self::declaredConditionally($node) ? '' : ($node->namespacedName?->toString() ?? '');
+    $fqcn = $node->namespacedName?->toString() ?? '';
+    $fqcn = self::declaredAsFallback($node, $fqcn) ? '' : $fqcn;
     $this->classStack[] = $fqcn;
     $kind = match (TRUE) {
       $node instanceof Interface_ => 'interface',
@@ -401,22 +408,68 @@ final class GraphVisitor extends NodeVisitorAbstract {
   }
 
   /**
-   * Whether a declaration sits inside anything but a namespace or declare.
+   * Whether a declaration exists only when the real one does not.
+   *
+   * The stand-in shape is `if (!class_exists('X')) { class X … }`, and the same
+   * with interface_exists, trait_exists, enum_exists or function_exists, the
+   * name written as a string or as `X::class`, alone or in a conjunction. The
+   * declaration must sit in that `if`'s own branch, not its `else`.
    *
    * @param \PhpParser\Node $node
    *   A class-like or function declaration.
+   * @param string $fqcn
+   *   Its fully-qualified name.
    *
    * @return bool
-   *   TRUE when some statement encloses it that runs conditionally, or not
-   *   at all until called: an `if` branch, a loop, a function body.
+   *   TRUE for a stand-in.
    */
-  private static function declaredConditionally(Node $node): bool {
-    for ($parent = $node->getAttribute('parent'); $parent instanceof Node; $parent = $parent->getAttribute('parent')) {
-      if (!$parent instanceof Namespace_ && !$parent instanceof Declare_) {
+  private static function declaredAsFallback(Node $node, string $fqcn): bool {
+    if ($fqcn === '') {
+      return FALSE;
+    }
+    $child = $node;
+    for ($parent = $node->getAttribute('parent'); $parent instanceof Node; $child = $parent, $parent = $parent->getAttribute('parent')) {
+      if ($parent instanceof If_ && in_array($child, $parent->stmts, TRUE) && self::guardsAbsenceOf($parent->cond, $fqcn)) {
         return TRUE;
       }
     }
     return FALSE;
+  }
+
+  /**
+   * Whether a condition holds only when the named symbol does not exist.
+   *
+   * @param \PhpParser\Node\Expr $condition
+   *   The `if` condition.
+   * @param string $fqcn
+   *   The declared name.
+   *
+   * @return bool
+   *   TRUE for `!class_exists('<name>')` and its siblings.
+   */
+  private static function guardsAbsenceOf(Expr $condition, string $fqcn): bool {
+    if ($condition instanceof BooleanAnd || $condition instanceof LogicalAnd) {
+      return self::guardsAbsenceOf($condition->left, $fqcn) || self::guardsAbsenceOf($condition->right, $fqcn);
+    }
+    if (!$condition instanceof BooleanNot || !$condition->expr instanceof FuncCall || !$condition->expr->name instanceof Name) {
+      return FALSE;
+    }
+    $check = strtolower($condition->expr->name->getLast());
+    if (!in_array($check, ['class_exists', 'interface_exists', 'trait_exists', 'enum_exists', 'function_exists'], TRUE)) {
+      return FALSE;
+    }
+    $argument = $condition->expr->args[0] ?? NULL;
+    if (!$argument instanceof Arg) {
+      return FALSE;
+    }
+    $value = $argument->value;
+    $named = match (TRUE) {
+      $value instanceof String_ => $value->value,
+      $value instanceof ClassConstFetch && $value->class instanceof Name
+        && $value->name instanceof Identifier && strtolower($value->name->toString()) === 'class' => $value->class->toString(),
+      default => NULL,
+    };
+    return $named !== NULL && strcasecmp(ltrim($named, '\\'), $fqcn) === 0;
   }
 
   /**

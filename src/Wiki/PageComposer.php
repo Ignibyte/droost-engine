@@ -22,9 +22,19 @@ use Droost\Engine\Wiki\Okf\FrontmatterParser;
 final readonly class PageComposer {
 
   /**
-   * The generator identity stamped into every composed page.
+   * The generator a page records when droost:wiki:generate wrote its body.
+   *
+   * The default, for the AI provider and --body-file. The other writers name
+   * themselves: an agent through droost_wiki_write is GENERATOR_WRITE, and
+   * a body rendered with no model is PageRenderer::GENERATOR. One constant
+   * for all three made an agent's page read as a model's (F-69).
    */
   public const string GENERATOR = 'droost:wiki:generate';
+
+  /**
+   * The generator a page records when an agent wrote it through the tool.
+   */
+  public const string GENERATOR_WRITE = 'droost:wiki:write';
 
   /**
    * Maximum provenance sources kept on a page.
@@ -70,6 +80,9 @@ final readonly class PageComposer {
    *   exactly the files the page's claims rest on. Round 30 (T26) carried a
    *   page whose six default sources omitted the component files carrying
    *   its sharpest claims, with no way to say otherwise.
+   * @param string $generator
+   *   Who wrote the body: GENERATOR, GENERATOR_WRITE or
+   *   PageRenderer::GENERATOR.
    *
    * @return string
    *   The full page text: an OKF frontmatter fence followed by the body.
@@ -79,7 +92,7 @@ final readonly class PageComposer {
    *   selection, a chosen path is not in the inventory, or the assembled page
    *   fails the real parse/validate contract.
    */
-  public function compose(string $module, array $factsheet, string $body, string $commit, ?string $timestamp = NULL, ?array $chosen = NULL): string {
+  public function compose(string $module, array $factsheet, string $body, string $commit, ?string $timestamp = NULL, ?array $chosen = NULL, string $generator = self::GENERATOR): string {
     $sources = $this->selection($module, $factsheet, $chosen)['sources'];
     if ($sources === []) {
       throw new ComposeException(sprintf('factsheet for "%s" lists no usable sources', $module));
@@ -89,11 +102,13 @@ final readonly class PageComposer {
 
     $identity = is_array($factsheet['identity'] ?? NULL) ? $factsheet['identity'] : [];
     $label = $this->scalarString($identity['label'] ?? NULL) ?? $module;
+    // A theme is documented like a module and typed as what it is (B2).
+    $theme = ($identity['kind'] ?? NULL) === 'theme';
     $description = $this->scalarString($identity['description'] ?? NULL)
-      ?? sprintf('Droost wiki page for the %s module.', $module);
+      ?? sprintf('Droost wiki page for the %s %s.', $module, $theme ? 'theme' : 'module');
 
     $frontmatter = [
-      'type' => 'Drupal Module',
+      'type' => $theme ? 'Drupal Theme' : 'Drupal Module',
       'title' => $label === $module ? $module : sprintf('%s (%s)', $label, $module),
       'description' => $description,
       'tags' => [$module],
@@ -106,7 +121,7 @@ final readonly class PageComposer {
       'modules' => [$module],
       'sources' => $sources,
       'generated_commit' => $commit,
-      'generator' => self::GENERATOR,
+      'generator' => $generator,
       'queries' => $this->queries($template),
     ];
 

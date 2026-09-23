@@ -7,6 +7,7 @@ namespace Droost\Engine\Tests\Wiki;
 use Droost\Engine\Wiki\ComposeException;
 use Droost\Engine\Wiki\Okf\FrontmatterParser;
 use Droost\Engine\Wiki\PageComposer;
+use Droost\Engine\Wiki\PageRenderer;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -81,6 +82,29 @@ final class PageComposerTest extends TestCase {
     $this->assertSame('abc1234', $meta->provenance->generatedCommit);
     $this->assertSame(PageComposer::GENERATOR, $meta->provenance->generator);
     $this->assertStringContainsString('# Foo', $meta->body);
+  }
+
+  /**
+   * Each writer records itself, and a theme's page is typed as a theme.
+   *
+   * F-69: an agent's page, written through droost_wiki_write, recorded the
+   * drush generator's id, so nothing told it from a model's.
+   */
+  public function testWriterAndKindAreRecorded(): void {
+    $sources = [['path' => 'foo/foo.info.yml', 'hash' => 'xxh3:1111111111111111']];
+    $module = $this->parser->parse($this->composer->compose('foo', $this->factsheet($sources), "Prose.\n", 'abc1234'));
+    $this->assertSame('Drupal Module', $module->type);
+    $this->assertSame(PageComposer::GENERATOR, $module->provenance?->generator, 'the default is the drush command');
+
+    $written = $this->composer->compose('foo', $this->factsheet($sources), "Prose.\n", 'abc1234', NULL, NULL, PageComposer::GENERATOR_WRITE);
+    $this->assertSame('droost:wiki:write', $this->parser->parse($written)->provenance?->generator);
+
+    $factsheet = $this->factsheet($sources);
+    $factsheet['identity'] = ['kind' => 'theme', 'label' => 'Foo'];
+    $theme = $this->parser->parse($this->composer->compose('foo', $factsheet, "Prose.\n", 'abc1234', NULL, NULL, PageRenderer::GENERATOR));
+    $this->assertSame('Drupal Theme', $theme->type);
+    $this->assertSame('Droost wiki page for the foo theme.', $theme->description);
+    $this->assertSame('droost:wiki:render', $theme->provenance?->generator);
   }
 
   /**

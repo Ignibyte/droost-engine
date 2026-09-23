@@ -122,6 +122,15 @@ provably wrote and nobody has touched since — and its sentinel records the
 SKILL.md hash so later sweeps can keep an edited skill. Breaking, hence the
 minor.
 
+**0.7.2** records only unconditional declarations as code-graph symbols. A
+class or function declared inside an `if`, a loop or a function body exists
+only once that code has run, and is usually a fallback for the real one:
+project_browser's fixture script declares `class Drupal` when
+`!class_exists('Drupal')`. With core unindexed, that stand-in owned every
+`\Drupal::` call in a codebase, so the wiki put project_browser in scope for
+every custom module that calls `\Drupal`. `PhpGraphExtractor` now runs
+`ParentConnectingVisitor`, which `GraphVisitor` expects.
+
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 
 ## Install

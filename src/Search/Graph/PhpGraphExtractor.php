@@ -6,6 +6,7 @@ namespace Droost\Engine\Search\Graph;
 
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\NodeVisitor\ParentConnectingVisitor;
 use PhpParser\ParserFactory;
 
 /**
@@ -64,6 +65,8 @@ final class PhpGraphExtractor {
     }
     $traverser = new NodeTraverser();
     $traverser->addVisitor(new NameResolver());
+    // Before the graph visitor, which reads each declaration's parents.
+    $traverser->addVisitor(new ParentConnectingVisitor());
     $visitor = new GraphVisitor($file, $module, $this->hookNames);
     $traverser->addVisitor($visitor);
     $traverser->traverse($ast);

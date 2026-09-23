@@ -15,9 +15,11 @@ use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Interface_;
+use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\VariadicPlaceholder;
@@ -33,8 +35,18 @@ use PhpParser\NodeVisitorAbstract;
  * name exists in the injected api.php-derived universe — precision over
  * recall, so helper functions never masquerade as hooks), derived_by (a
  * "deriver" attribute argument on a plugin class). Expects NameResolver to
- * have run so referenced names are fully qualified. Instance-method / DI
+ * have run so referenced names are fully qualified, and ParentConnectingVisitor
+ * so a declaration's enclosing statements are known. Instance-method / DI
  * call resolution (which needs type inference) is intentionally out of scope.
+ *
+ * Only an unconditional declaration is a symbol. A class or function declared
+ * inside an `if`, a loop or a function body exists only once that code has
+ * run, and is almost always a fallback for the real one declared elsewhere:
+ * project_browser's fixture script declares `class Drupal` when
+ * `!class_exists('Drupal')`. The index carries no core, so recording that
+ * stand-in made it the owner of every `\Drupal::` call in the codebase
+ * (F-63). A conditional declaration is kept as edge-source context only, as
+ * an anonymous class is, so it neither claims a name nor sources an edge.
  */
 final class GraphVisitor extends NodeVisitorAbstract {
 
@@ -90,7 +102,7 @@ final class GraphVisitor extends NodeVisitorAbstract {
       $this->enterClassLike($node);
     }
     elseif ($node instanceof Function_) {
-      $fqcn = $node->namespacedName?->toString() ?? '';
+      $fqcn = self::declaredConditionally($node) ? '' : ($node->namespacedName?->toString() ?? '');
       $this->pushSymbol($fqcn, 'function', $node->getStartLine());
       $this->hookAttributeEdges($fqcn, $node->attrGroups);
       $this->proceduralHookEdge($fqcn, $node->name->toString());
@@ -251,8 +263,10 @@ final class GraphVisitor extends NodeVisitorAbstract {
       // deriverEdges runs on LEAVE, not enter: only by now has NameResolver
       // descended into and resolved the deriver attribute's argument to a
       // fully-qualified name. On enter it is still the bare short name
-      // ("SemDeriver" rather than "Drupal\...\SemDeriver").
-      $fqcn = $node->namespacedName?->toString() ?? '';
+      // ("SemDeriver" rather than "Drupal\...\SemDeriver"). The name is the
+      // one enterClassLike() pushed, which is '' for a conditional
+      // declaration.
+      $fqcn = $this->top($this->classStack);
       if ($fqcn !== '') {
         $this->deriverEdges($fqcn, $node->attrGroups);
       }
@@ -272,7 +286,7 @@ final class GraphVisitor extends NodeVisitorAbstract {
    *   The class-like node.
    */
   private function enterClassLike(ClassLike $node): void {
-    $fqcn = $node->namespacedName?->toString() ?? '';
+    $fqcn = self::declaredConditionally($node) ? '' : ($node->namespacedName?->toString() ?? '');
     $this->classStack[] = $fqcn;
     $kind = match (TRUE) {
       $node instanceof Interface_ => 'interface',
@@ -384,6 +398,25 @@ final class GraphVisitor extends NodeVisitorAbstract {
         'module' => $this->module,
       ];
     }
+  }
+
+  /**
+   * Whether a declaration sits inside anything but a namespace or declare.
+   *
+   * @param \PhpParser\Node $node
+   *   A class-like or function declaration.
+   *
+   * @return bool
+   *   TRUE when some statement encloses it that runs conditionally, or not
+   *   at all until called: an `if` branch, a loop, a function body.
+   */
+  private static function declaredConditionally(Node $node): bool {
+    for ($parent = $node->getAttribute('parent'); $parent instanceof Node; $parent = $parent->getAttribute('parent')) {
+      if (!$parent instanceof Namespace_ && !$parent instanceof Declare_) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**

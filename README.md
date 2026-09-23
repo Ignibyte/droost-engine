@@ -94,6 +94,21 @@ vector-store interfaces. The storage layer stays in the module for now — four
 classes built on Drupal's database API, which need a port of their own before
 they can move (B5b).
 
+**0.6.x** lands B5b: the three storage ports (file manifest, code graph,
+vector store), each with a SQLite implementation. They are what
+`bin/droost-index` runs on, so it can index a repository and answer
+code-graph questions with no Drupal site at all. The Drupal indexer stays in
+the module, because it reads site configuration a bare checkout does not
+have. The line also added:
+- the recipe, migrate, plugin-deriver, media-source, ckeditor5-plugin and
+  functional-test blueprints;
+- metadata filters on the vector-store port, applied before the k-limit;
+- slash-command materialization for the Claude installer (`CommandProvider`,
+  with nested command names).
+
+It also let a guideline topic name the module it describes, which 0.7.0 took
+out again with the rest.
+
 **0.7.0** removes the guidance tranche. `Guidelines\GuidelineProvider` is gone
 — its one non-guidance job, `deriveMajor()`, is now `Support\CoreVersion::major()`
 — and `Skills\SkillProvider` lists only the consumer's own skill files instead

@@ -249,8 +249,11 @@ PHP;
     # cannot run.
   drupal:
     label: {{label_yaml}}
-    library: {{module}}/{{plugin_id}}
-    admin_library: {{module}}/{{plugin_id}}.admin
+    # No `library:` or `admin_library:` keys: this scaffold writes no asset
+    # library, and core throws InvalidPluginDefinitionException for one that
+    # does not exist. That throw comes from the plugin manager, so it breaks
+    # every rich-text editor on the site, not just this plugin. Add them once
+    # {{module}}.libraries.yml declares the libraries they name.
     toolbar_items: {}
     elements:
       # Declare every element and attribute this plugin may produce. "<em>"

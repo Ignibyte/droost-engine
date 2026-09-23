@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Droost\Engine\Tests\Scaffold;
 
 use Droost\Engine\Scaffold\Blueprint\Ckeditor5PluginBlueprint;
+use Droost\Engine\Scaffold\Blueprint\McpToolBlueprint;
 use Droost\Engine\Scaffold\Blueprint\MediaSourceBlueprint;
 use Droost\Engine\Scaffold\Blueprint\MigrateBlueprint;
 use Droost\Engine\Scaffold\Blueprint\PluginDeriverBlueprint;
@@ -26,6 +27,7 @@ use Symfony\Component\Yaml\Yaml;
 #[CoversClass(MediaSourceBlueprint::class)]
 #[CoversClass(MigrateBlueprint::class)]
 #[CoversClass(Ckeditor5PluginBlueprint::class)]
+#[CoversClass(McpToolBlueprint::class)]
 final class NewBlueprintsTest extends TestCase {
 
   /**
@@ -169,6 +171,32 @@ final class NewBlueprintsTest extends TestCase {
     // An element declared but not produced is harmless; one produced but not
     // declared is silently stripped, so the scaffold must ship elements.
     $this->assertNotEmpty($drupal['elements']);
+    // No library the scaffold does not create. Core throws
+    // InvalidPluginDefinitionException for an admin_library that does not
+    // exist, and that fails plugin discovery, so every rich-text editor on
+    // the site broke the moment the generated module was enabled.
+    $this->assertArrayNotHasKey('admin_library', $drupal);
+    $this->assertArrayNotHasKey('library', $drupal);
+  }
+
+  /**
+   * The MCP tool implements doExecute(), the hook DroostToolBase calls.
+   *
+   * DroostToolBase::execute() is the public wrapper that rebuilds the tool on
+   * the current kernel and records the call. The template overrode it, so a
+   * generated tool ran on the kernel the server booted with and skipped both.
+   */
+  public function testMcpToolImplementsTheProtectedHook(): void {
+    $result = $this->generate(new McpToolBlueprint(), [
+      'id' => 'example_tool',
+      'class' => 'ExampleTool',
+      'label' => 'Example tool',
+    ]);
+
+    $this->assertContains('modules/mymod/src/Plugin/mcp_server/Tool/ExampleTool.php', $result->created);
+    $tool = $this->read('modules/mymod/src/Plugin/mcp_server/Tool/ExampleTool.php');
+    $this->assertStringContainsString('protected function doExecute(array $arguments, ClientGateway $gateway): mixed', $tool);
+    $this->assertStringNotContainsString('public function execute(', $tool);
   }
 
   /**

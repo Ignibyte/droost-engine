@@ -142,8 +142,11 @@ final class McpToolBlueprint extends AbstractBlueprint {
 
       /**
        * {@inheritdoc}
+       *
+       * DroostToolBase::execute() calls this on a tool rebuilt for the current
+       * kernel and records the call, so implement this, never execute().
        */
-      public function execute(array $arguments, ClientGateway $gateway): mixed {
+      protected function doExecute(array $arguments, ClientGateway $gateway): mixed {
         // Implement the tool. Return data in the {success, message, data} envelope.
         return $this->succeed('{{label}} ran.', []);
       }

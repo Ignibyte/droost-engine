@@ -140,6 +140,21 @@ theme's preprocess hook, declared only while a module is on, dropped out of
 the graph although each is the only declaration of its name.
 `RepoIndexer::INDEXER_VERSION` is 2, so a repository index rebuilds itself.
 
+**0.7.4** fixes two blueprints. The CKEditor 5 plugin's declaration no longer
+names a `library` or `admin_library` the blueprint never writes, and the MCP
+tool blueprint implements the `doExecute()` hook its base class calls rather
+than overriding the final `execute()`.
+
+**0.7.5** adds `Site\ScopeClassifier` and `Site\Provenance`: one answer to who
+owns an extension's code, where droost had five that disagreed. Composer's
+runtime record decides first (`drupal-core` is core, `drupal-custom-*` custom,
+any other `drupal-*` package contrib, the deepest install directory winning),
+then the first path segment named `contrib` or `custom`, and code placed by
+hand is the project's own. A package installed at or above the docroot owns
+nothing, so a module's own CI checkout does not make every extension contrib.
+Paths are compared as written, never resolved, so a package composer linked
+in from elsewhere is still found at its link.
+
 The rest of `Support` (clock, state store) arrives with the areas that need it.
 
 ## Install

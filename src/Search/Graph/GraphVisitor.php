@@ -113,6 +113,7 @@ final class GraphVisitor extends NodeVisitorAbstract {
       $this->pushSymbol($fqcn, 'function', $node->getStartLine());
       $this->hookAttributeEdges($fqcn, $node->attrGroups);
       $this->proceduralHookEdge($fqcn, $node->name->toString());
+      $this->documentedHook($node);
     }
     elseif ($node instanceof ClassMethod) {
       $class = $this->top($this->classStack);
@@ -382,6 +383,32 @@ final class GraphVisitor extends NodeVisitorAbstract {
     foreach ($names as $name) {
       $this->edges[] = ['src' => $src, 'dst' => $name->toString(), 'kind' => $kind];
     }
+  }
+
+  /**
+   * Declares the hook an api.php documents, owned by the module documenting it.
+   *
+   * An implementation's edge points at `hook:NAME`, and nothing declared that
+   * name, so a query joining both ends of an edge to a symbol dropped every
+   * hook edge. A custom module that only implemented a contrib module's
+   * hooks read as not using that module at all (B3). The api.php's
+   * `function hook_NAME()` is the declaration.
+   *
+   * @param \PhpParser\Node\Stmt\Function_ $node
+   *   A function declaration.
+   */
+  private function documentedHook(Function_ $node): void {
+    $name = $node->name->toString();
+    if (!str_ends_with($this->file, '.api.php') || !str_starts_with($name, 'hook_') || strlen($name) <= 5) {
+      return;
+    }
+    $this->symbols[] = [
+      'fqcn' => 'hook:' . substr($name, 5),
+      'kind' => 'hook',
+      'file' => $this->file,
+      'line' => $node->getStartLine(),
+      'module' => $this->module,
+    ];
   }
 
   /**

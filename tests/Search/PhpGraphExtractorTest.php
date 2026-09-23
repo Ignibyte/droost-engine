@@ -164,4 +164,50 @@ PHP;
     $this->assertNotContains('Drupal\fx\t|Drupal\fx\Translator|calls', $edges, 'a stand-in sources no edge');
   }
 
+  /**
+   * A hook an api.php documents is a symbol its implementations point at.
+   *
+   * B3: an implementation's edge named `hook:NAME` and nothing declared it,
+   * so a module that only implemented another's hooks showed no coupling.
+   */
+  public function testDocumentedHookIsTheSymbolImplementationsReach(): void {
+    $api = <<<'PHP'
+<?php
+
+/**
+ * Alter a submission form.
+ */
+function hook_webform_submission_form_alter(array &$form) {
+}
+
+function helper() {
+}
+PHP;
+    $documented = (new PhpGraphExtractor())->extract($api, 'modules/contrib/webform/webform.api.php', 'webform');
+    $hooks = array_values(array_filter($documented['symbols'], static fn (array $s): bool => $s['kind'] === 'hook'));
+    $this->assertSame(['hook:webform_submission_form_alter'], array_column($hooks, 'fqcn'));
+    $this->assertSame('webform', $hooks[0]['module'], 'owned by the module that documents it');
+
+    $implementation = <<<'PHP'
+<?php
+
+namespace Drupal\kc\Hook;
+
+use Drupal\Core\Hook\Attribute\Hook;
+
+final class FormHooks {
+
+  #[Hook('webform_submission_form_alter')]
+  public function alter(array &$form): void {
+  }
+
+}
+PHP;
+    $implemented = (new PhpGraphExtractor())->extract($implementation, 'modules/custom/kc/src/Hook/FormHooks.php', 'kc');
+    $this->assertContains('hook:webform_submission_form_alter', array_column($implemented['edges'], 'dst'), 'the edge reaches the declared name');
+
+    $plain = (new PhpGraphExtractor())->extract("<?php\nfunction hook_not_documented() {}\n", 'modules/custom/kc/kc.module', 'kc');
+    $this->assertSame([], array_values(array_filter($plain['symbols'], static fn (array $s): bool => $s['kind'] === 'hook')), 'only an api.php declares a hook');
+  }
+
 }

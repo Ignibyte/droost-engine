@@ -225,8 +225,10 @@ PHP;
 # which is why the source plugin alone would never appear in migrate:status.
 id: {{migration_id}}
 label: '{{label_doc}}'
-# Groups let `drush migrate:import --group=` run a related set in order.
-migration_group: {{module}}
+# Tags let `drush migrate:import --tag=` run a related set. (A group,
+# `migration_group`, is migrate_plus's; core and drush 13 do not read it.)
+migration_tags:
+  - {{module}}
 
 source:
   plugin: {{id}}
@@ -261,6 +263,11 @@ YAML;
 
   /**
    * The migrate process-plugin template.
+   *
+   * The $destination_property of transform() is left untyped, as core's
+   * MigrateProcessInterface declares it: typing it narrows the parameter,
+   * and PHP refuses the class outright. It shipped as `string` until a live
+   * run hit the fatal (F-133).
    *
    * @return string
    *   The template with {{token}} placeholders.
@@ -318,7 +325,7 @@ final class {{class}} extends ProcessPluginBase {
     mixed $value,
     MigrateExecutableInterface $migrate_executable,
     Row $row,
-    string $destination_property,
+    $destination_property,
   ): mixed {
     if (!is_string($value)) {
       return $value;

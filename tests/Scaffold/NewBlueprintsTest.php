@@ -125,6 +125,68 @@ final class NewBlueprintsTest extends TestCase {
   }
 
   /**
+   * The process plugin loads under core's own signature (F-133).
+   *
+   * The template typed transform()'s $destination_property as string, and
+   * core's MigrateProcessInterface leaves it untyped: narrowing a parameter
+   * is a fatal error, raised when PHP loads the class, so the generated file
+   * passed every string check here and failed on the first real site. This
+   * loads it in a separate PHP process against stubs that carry
+   * core's exact signatures, and asks PHP.
+   */
+  public function testMigrateProcessLoadsUnderCoresSignature(): void {
+    $this->generate(new MigrateBlueprint(), ['plugin-type' => 'process', 'id' => 'tidy_title']);
+    $stubs = $this->appRoot . '/stubs.php';
+    file_put_contents($stubs, <<<'STUBS'
+<?php
+namespace Drupal\migrate {
+  interface MigrateExecutableInterface {}
+  final class Row {}
+}
+namespace Drupal\migrate\Plugin {
+  interface MigrateProcessInterface {
+    public function transform($value, \Drupal\migrate\MigrateExecutableInterface $migrate_executable, \Drupal\migrate\Row $row, $destination_property);
+  }
+}
+namespace Drupal\migrate {
+  abstract class ProcessPluginBase implements Plugin\MigrateProcessInterface {
+    public function transform($value, MigrateExecutableInterface $migrate_executable, Row $row, $destination_property) {
+      throw new \LogicException('not called');
+    }
+  }
+}
+namespace Drupal\migrate\Attribute {
+  #[\Attribute]
+  final class MigrateProcess {
+    public function __construct(public string $id = '') {}
+  }
+}
+STUBS);
+    $generated = $this->appRoot . '/modules/mymod/src/Plugin/migrate/process/TidyTitle.php';
+    $output = [];
+    exec(escapeshellarg(PHP_BINARY) . ' -d display_errors=stderr -r ' . escapeshellarg('require ' . var_export($stubs, TRUE) . '; require ' . var_export($generated, TRUE) . '; echo "loaded";') . ' 2>&1', $output, $exit);
+
+    $this->assertSame(0, $exit, 'PHP refused the generated class: ' . implode("\n", $output));
+    $this->assertSame(['loaded'], $output);
+  }
+
+  /**
+   * The migration tags itself, the grouping core and drush 13 read (F-133).
+   *
+   * It carried `migration_group`, which is migrate_plus's, with a comment
+   * naming a `drush migrate:import --group` option drush 13 does not have.
+   */
+  public function testMigrateSourceMigrationIsTagged(): void {
+    $this->generate(new MigrateBlueprint(), ['plugin-type' => 'source', 'id' => 'legacy_items']);
+    $files = glob($this->appRoot . '/modules/mymod/migrations/*.yml') ?: [];
+    $this->assertCount(1, $files);
+    $migration = Yaml::parseFile($files[0]);
+    $this->assertIsArray($migration);
+    $this->assertSame(['mymod'], $migration['migration_tags'] ?? NULL);
+    $this->assertArrayNotHasKey('migration_group', $migration);
+  }
+
+  /**
    * An unknown plugin type is refused by name.
    */
   public function testMigrateRefusesAnUnknownPluginType(): void {

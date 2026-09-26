@@ -155,6 +155,12 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**0.7.7** fixes the migrate blueprint: its process plugin typed
+`transform()`'s `$destination_property`, which core leaves untyped, and PHP
+refused every class it generated; its migration now carries
+`migration_tags`, which core and drush 13 read, instead of migrate_plus's
+`migration_group`.
+
 **0.7.6** is the wiki at scale:
 - `Wiki\PageRenderer` writes a page body from a factsheet alone, with no
   model. The same factsheet renders the same bytes, and a section nobody

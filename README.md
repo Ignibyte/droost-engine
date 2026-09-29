@@ -155,6 +155,12 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**0.7.8** fixes the hook blueprint: it scaffolded a second implementation
+of a hook core invokes for one module at a time (a preprocess hook,
+`theme`, `help`, `mail`) in a module that already had one, and the first
+call threw core's "should not implement … more than once". It now refuses,
+and names the implementation to add to.
+
 **0.7.7** fixes the migrate blueprint: its process plugin typed
 `transform()`'s `$destination_property`, which core leaves untyped, and PHP
 refused every class it generated; its migration now carries

@@ -19,8 +19,27 @@ use Droost\Engine\Scaffold\ScaffoldResult;
  * phpcs + phpstan-max with an empty baseline.
  *
  * Inputs: hook (the hook name, e.g. "entity_presave"), class.
+ *
+ * A hook core invokes for one module at a time may be implemented once per
+ * module: ModuleHandler::invoke() throws "Module X should not implement Y
+ * more than once" when it finds two. A preprocess hook is one (ThemeManager
+ * runs a module's preprocess through invoke()), so a second
+ * #[Hook('preprocess_views_view')] class in a module that already has one
+ * scaffolded cleanly, passed its test, and failed the first render of every
+ * page (F-150). The blueprint refuses that case and names the implementation
+ * to add to instead.
  */
 final class HookBlueprint extends AbstractBlueprint {
+
+  /**
+   * Hooks besides preprocess core invokes for one module at a time.
+   *
+   * From core's ModuleHandler::invoke() calls whose hook a #[Hook] class can
+   * implement: the theme registry's hook_theme, help's hook_help and the
+   * mail manager's hook_mail. The .install hooks core also invokes one module
+   * at a time live in no class.
+   */
+  private const ONE_PER_MODULE = ['theme', 'help', 'mail'];
 
   /**
    * {@inheritdoc}
@@ -51,6 +70,17 @@ final class HookBlueprint extends AbstractBlueprint {
     if ($hook === '' || $class === '') {
       throw new \InvalidArgumentException('Could not derive a valid hook name and class. Pass --hook (e.g. entity_presave) and optionally --class.');
     }
+    if ($this->oncePerModule($hook)) {
+      $existing = $this->existingImplementation($context, $hook);
+      if ($existing !== NULL) {
+        throw new \InvalidArgumentException(sprintf(
+          '%1$s already implements %2$s, in %3$s. Core invokes %2$s for one module at a time, and a module with two implementations fails the first time it runs ("Module %1$s should not implement %2$s more than once"). Add to that implementation instead of scaffolding another.',
+          $context->module,
+          $hook,
+          $existing,
+        ));
+      }
+    }
     $method = 'on' . $this->pascalCase($hook);
     $tokens = [
       '{{module}}' => $context->module,
@@ -70,6 +100,54 @@ final class HookBlueprint extends AbstractBlueprint {
       strtr($this->testTemplate(), $tokens),
       $result,
     );
+  }
+
+  /**
+   * Whether core invokes the hook for one module at a time.
+   *
+   * @param string $hook
+   *   The hook name, without the hook_ prefix.
+   *
+   * @return bool
+   *   TRUE for a preprocess hook and the hooks in ONE_PER_MODULE.
+   */
+  private function oncePerModule(string $hook): bool {
+    return $hook === 'preprocess' || str_starts_with($hook, 'preprocess_') || in_array($hook, self::ONE_PER_MODULE, TRUE);
+  }
+
+  /**
+   * The module's existing implementation of a hook, if it has one.
+   *
+   * A #[Hook('<hook>')] in any class under the module's src/, or a function
+   * <module>_<hook>() in its .module file.
+   *
+   * @param \Droost\Engine\Scaffold\ScaffoldContext $context
+   *   The scaffold context.
+   * @param string $hook
+   *   The hook name, without the hook_ prefix.
+   *
+   * @return string|null
+   *   The implementing file, relative to the app root, or NULL.
+   */
+  private function existingImplementation(ScaffoldContext $context, string $hook): ?string {
+    $root = $context->appRoot . '/' . $context->modulePath;
+    $moduleFile = $root . '/' . $context->module . '.module';
+    $function = '/^function\s+' . preg_quote($context->module . '_' . $hook, '/') . '\s*\(/m';
+    if (is_file($moduleFile) && preg_match($function, (string) file_get_contents($moduleFile)) === 1) {
+      return $context->modulePath . '/' . $context->module . '.module';
+    }
+    if (!is_dir($root . '/src')) {
+      return NULL;
+    }
+    $attribute = '/#\[\s*(?:\\\\?Drupal\\\\Core\\\\Hook\\\\Attribute\\\\)?Hook\(\s*(?:hook:\s*)?[\'"]' . preg_quote($hook, '/') . '[\'"]/';
+    $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+      if ($file instanceof \SplFileInfo && $file->isFile() && $file->getExtension() === 'php'
+        && preg_match($attribute, (string) file_get_contents($file->getPathname())) === 1) {
+        return $context->modulePath . substr($file->getPathname(), strlen($root));
+      }
+    }
+    return NULL;
   }
 
   /**

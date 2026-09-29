@@ -76,6 +76,67 @@ final class HookBlueprintTest extends TestCase {
   }
 
   /**
+   * A second implementation of a hook core invokes per module is refused.
+   *
+   * P6 run 22 scaffolded a second #[Hook('preprocess_views_view')] class in
+   * a module whose filter hooks already had one. The blueprint reported
+   * success, the class's test passed, and the first render of /camps threw
+   * core's "should not implement preprocess_views_view more than once"
+   * (F-150). A preprocess hook in a class, and hook_theme in the .module
+   * file, are each found; nothing is written.
+   */
+  public function testSecondPerModuleImplementationIsRefused(): void {
+    $this->put('modules/mymod/src/Hook/FilterHooks.php', "<?php\n\nnamespace Drupal\\mymod\\Hook;\n\nuse Drupal\\Core\\Hook\\Attribute\\Hook;\n\nfinal class FilterHooks {\n\n  #[Hook('preprocess_views_view')]\n  public function onPreprocessViewsView(array &\$variables): void {}\n\n}\n");
+    $this->put('modules/mymod/mymod.module', "<?php\n\nfunction mymod_theme(): array {\n  return [];\n}\n");
+    $this->put('modules/mymod/src/Help/HelpHooks.php', "<?php\n\nnamespace Drupal\\mymod\\Help;\n\nfinal class HelpHooks {\n\n  #[\\Drupal\\Core\\Hook\\Attribute\\Hook(hook: 'help')]\n  public function onHelp(): string {\n    return '';\n  }\n\n}\n");
+    $asked = [
+      'preprocess_views_view' => 'modules/mymod/src/Hook/FilterHooks.php',
+      'theme' => 'modules/mymod/mymod.module',
+      'help' => 'modules/mymod/src/Help/HelpHooks.php',
+    ];
+    foreach ($asked as $hook => $where) {
+      try {
+        $this->generate(['hook' => $hook, 'class' => 'PageHooks']);
+        $this->fail("a second $hook was scaffolded");
+      }
+      catch (\InvalidArgumentException $e) {
+        $this->assertStringContainsString("mymod already implements $hook, in $where", $e->getMessage());
+        $this->assertStringContainsString('should not implement', $e->getMessage());
+      }
+    }
+    $this->assertFileDoesNotExist($this->appRoot . '/modules/mymod/src/Hook/PageHooks.php');
+  }
+
+  /**
+   * A hook every implementation of which runs is scaffolded beside another.
+   *
+   * Core's invokeAll() runs each of a module's implementations of
+   * form_alter, so a second is allowed; so is a preprocess hook the module
+   * does not have yet.
+   */
+  public function testHooksCoreInvokesForAllStillScaffold(): void {
+    $this->put('modules/mymod/src/Hook/FormHooks.php', "<?php\n\nnamespace Drupal\\mymod\\Hook;\n\nuse Drupal\\Core\\Hook\\Attribute\\Hook;\n\nfinal class FormHooks {\n\n  #[Hook('form_alter')]\n  public function onFormAlter(): void {}\n\n  #[Hook('preprocess_views_view')]\n  public function onPreprocessViewsView(): void {}\n\n}\n");
+    $this->assertNotEmpty($this->generate(['hook' => 'form_alter', 'class' => 'MoreFormHooks'])->created);
+    $this->assertNotEmpty($this->generate(['hook' => 'preprocess_node', 'class' => 'NodeHooks'])->created);
+  }
+
+  /**
+   * Writes a fixture file under the app root.
+   *
+   * @param string $relative
+   *   The path relative to the app root.
+   * @param string $content
+   *   The file content.
+   */
+  private function put(string $relative, string $content): void {
+    $path = $this->appRoot . '/' . $relative;
+    if (!is_dir(dirname($path))) {
+      mkdir(dirname($path), 0777, TRUE);
+    }
+    file_put_contents($path, $content);
+  }
+
+  /**
    * Runs the blueprint over the fixture app root.
    *
    * @param array<string, string> $inputs

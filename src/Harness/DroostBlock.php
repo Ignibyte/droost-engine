@@ -25,15 +25,22 @@ final readonly class DroostBlock {
   public const string DIRECTIVE = <<<'TXT'
   ## Use Droost first
 
-  Droost is the brain of this codebase. When writing, modifying, reviewing,
+  Droost is the brain of this codebase, and it knows it first-hand: its
+  index, its symbol graph and its wiki are built from this project's own
+  code, core and contrib included. When writing, modifying, reviewing,
   debugging, or planning ANY Drupal or PHP code in this project, ask it what
-  THIS project actually contains before relying on prior knowledge — Drupal
-  APIs change across versions and model training lags.
+  THIS project actually contains before relying on prior knowledge or walking
+  the file tree — Drupal APIs change across versions and model training lags.
 
+  - Put your plan to it: `droost_consult` reads the spec and answers each construct and page with what droost believes is good Drupal practice here.
+  - What builds a kind of thing on this site (a generator, a blueprint, a droost tool): `droost_decide`.
+  - How this project is put together, and how it documents itself: `droost_wiki`.
   - Find real code in this codebase: `droost_search`, `droost_symbol`, `droost_graph`.
   - What an installed module gives you: `droost_module_docs`.
   - Verify what actually exists: `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
-  - How this project documents itself: `droost_wiki`.
+
+  Ask while you code as much as while you plan. Its answers are advice: you
+  choose how to build, and the record shows both.
   TXT;
 
   /**

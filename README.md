@@ -155,6 +155,11 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**0.7.9** rewrites the directive every agent reads (AGENTS.md and the MCP
+handshake): droost knows this codebase first-hand, so put the plan to it
+(`droost_consult`), ask it while coding instead of walking the tree, and
+read its answers as advice.
+
 **0.7.8** fixes the hook blueprint: it scaffolded a second implementation
 of a hook core invokes for one module at a time (a preprocess hook,
 `theme`, `help`, `mail`) in a module that already had one, and the first

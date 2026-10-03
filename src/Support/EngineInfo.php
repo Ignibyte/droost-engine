@@ -20,7 +20,7 @@ final class EngineInfo {
   /**
    * The engine release this build reports.
    */
-  public const VERSION = '0.7.8';
+  public const VERSION = '0.7.9';
 
   /**
    * Returns the engine release string.

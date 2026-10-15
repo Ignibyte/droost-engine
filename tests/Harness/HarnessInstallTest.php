@@ -242,6 +242,44 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * An install removes the droost MCP server an earlier install registered.
+   *
+   * Droost is reached through drush; an editor configured to launch a droost
+   * server that no longer exists fails at every start. Every other server and
+   * key is kept, and a file left holding nothing is removed.
+   */
+  public function testInstallRemovesTheDroostServerEverywhere(): void {
+    $server = ['command' => 'ddev', 'args' => ['drush', 'mcp:server']];
+    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
+      'mcpServers' => ['droost' => $server, 'playwright' => ['command' => 'npx']],
+    ]));
+    @mkdir($this->root . '/.gemini');
+    file_put_contents($this->root . '/.gemini/settings.json', (string) json_encode(['mcpServers' => ['droost' => $server]]));
+    @mkdir($this->root . '/.codex');
+    file_put_contents($this->root . '/.codex/config.toml', "model = \"x\"\n" . Markers::TOML_BEGIN . "\n[mcp_servers.droost]\ncommand = \"ddev\"\n" . Markers::TOML_END . "\n");
+    file_put_contents($this->root . '/opencode.json', (string) json_encode([
+      'mcp' => ['droost' => ['type' => 'local']],
+      'theme' => 'dark',
+    ]));
+
+    $this->install('all');
+
+    $mcp = json_decode((string) file_get_contents($this->root . '/.mcp.json'), TRUE);
+    $this->assertIsArray($mcp);
+    $this->assertIsArray($mcp['mcpServers'] ?? NULL);
+    $this->assertSame(['playwright'], array_keys($mcp['mcpServers']), 'droost is gone, the user\'s server kept');
+    $this->assertFileDoesNotExist($this->root . '/.gemini/settings.json', 'a file left holding nothing is removed');
+    $codex = (string) file_get_contents($this->root . '/.codex/config.toml');
+    $this->assertStringNotContainsString('mcp_servers.droost', $codex);
+    $this->assertStringContainsString('model = "x"', $codex);
+    $opencode = json_decode((string) file_get_contents($this->root . '/opencode.json'), TRUE);
+    $this->assertIsArray($opencode);
+    $this->assertArrayNotHasKey('mcp', $opencode);
+    $this->assertSame('dark', $opencode['theme']);
+    $this->assertSame(['./AGENTS.md'], $opencode['instructions']);
+  }
+
+  /**
    * What droost is, stamped with the version, and naming no removed tool.
    */
   public function testDroostBlockNamesNoRemovedTool(): void {
@@ -249,9 +287,11 @@ final class HarnessInstallTest extends TestCase {
 
     $this->assertStringStartsWith('# Droost — Drupal 11.4.2, PHP ', $body);
     $this->assertStringContainsString('## Use Droost first', $body);
-    foreach (['droost_guidelines', 'droost_module_patterns'] as $removed) {
+    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__', 'MCP'] as $removed) {
       $this->assertStringNotContainsString($removed, $body);
     }
+    $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask');
+    $this->assertStringContainsString('drush droost:brief', $body);
     $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite([], '')))->body());
   }
 
@@ -274,7 +314,7 @@ final class HarnessInstallTest extends TestCase {
       new GeminiHarnessInstaller(),
       new OpencodeHarnessInstaller(),
     );
-    return $registry->install($this->root, ['command' => 'ddev', 'args' => ['drush', 'mcp:server']], $harness);
+    return $registry->install($this->root, $harness);
   }
 
   /**

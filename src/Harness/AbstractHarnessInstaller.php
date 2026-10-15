@@ -117,35 +117,11 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
   }
 
   /**
-   * Upserts a `{command, args}` MCP server entry under a JSON key path.
-   *
-   * @param string $root
-   *   The project root.
-   * @param string $relative
-   *   The JSON config relative path.
-   * @param string $parent
-   *   The parent key (e.g. "mcpServers").
-   * @param \Droost\Engine\Harness\InstallContext $context
-   *   The install context (carries command + args).
-   * @param \Droost\Engine\Harness\InstallResult $result
-   *   The result accumulator.
-   */
-  protected function upsertJsonServer(string $root, string $relative, string $parent, InstallContext $context, InstallResult $result): void {
-    if (JsonMerge::isMalformed($root . '/' . $relative)) {
-      $result->addWarning(sprintf('%s is present but not valid JSON; left unchanged to avoid destroying its contents. Fix it and re-run.', $relative));
-      return;
-    }
-    $data = JsonMerge::read($root . '/' . $relative);
-    $data = JsonMerge::setPath($data, $parent, 'droost', [
-      'command' => $context->command,
-      'args' => $context->args,
-    ]);
-    $this->write($root, $relative, JsonMerge::encode($data));
-    $result->addWritten($relative);
-  }
-
-  /**
    * Removes the droost MCP server entry from a JSON key path.
+   *
+   * Called on install as well as uninstall: droost serves no MCP server, so an
+   * entry an earlier install wrote launches nothing. A file left holding
+   * nothing else is deleted.
    *
    * @param string $root
    *   The project root.

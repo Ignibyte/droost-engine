@@ -9,7 +9,7 @@ use Droost\Engine\Skills\SkillMdWriter;
 use Droost\Engine\Skills\SkillProvider;
 
 /**
- * Claude Code: `.mcp.json` MCP server + a CLAUDE.md import of AGENTS.md.
+ * Claude Code: a CLAUDE.md import of AGENTS.md, the skills and the commands.
  *
  * Also renders Droost's skills as native Claude Agent Skills under
  * `.claude/skills/<name>/SKILL.md`, the slash commands under
@@ -74,7 +74,7 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
    * {@inheritdoc}
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
-    $this->upsertJsonServer($root, '.mcp.json', 'mcpServers', $context, $result);
+    $this->removeJsonServer($root, '.mcp.json', 'mcpServers', $result);
     $this->upsertMarkdown($root, 'CLAUDE.md', $this->importPointer(), $result);
     $emitted = [];
     foreach ($this->skills->getSkills() as $skill) {

@@ -6,7 +6,6 @@ namespace Droost\Engine\Tests\Harness;
 
 use Droost\Engine\Harness\JsonMerge;
 use Droost\Engine\Harness\ManagedRegion;
-use Droost\Engine\Harness\Toml;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -98,18 +97,6 @@ final class HarnessUtilitiesTest extends TestCase {
 
     $emptied = JsonMerge::unsetPath(['mcpServers' => ['droost' => []]], 'mcpServers', 'droost');
     $this->assertArrayNotHasKey('mcpServers', $emptied, 'Emptied parent dropped.');
-  }
-
-  /**
-   * Toml emits a valid escaped table and string array.
-   */
-  public function testTomlEmitter(): void {
-    $this->assertSame('"a\\"b"', Toml::string('a"b'), 'Quotes are escaped.');
-    $this->assertSame('["drush", "mcp:server"]', Toml::stringArray(['drush', 'mcp:server']));
-    $table = Toml::mcpServerTable('droost', 'ddev', ['drush', 'mcp:server']);
-    $this->assertStringContainsString('[mcp_servers.droost]', $table);
-    $this->assertStringContainsString('command = "ddev"', $table);
-    $this->assertStringContainsString('args = ["drush", "mcp:server"]', $table);
   }
 
 }

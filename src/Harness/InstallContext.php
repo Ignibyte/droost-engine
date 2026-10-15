@@ -19,17 +19,14 @@ final readonly class InstallContext {
    * block reaches Claude Code, Qwen, Gemini and opencode. A switch that could
    * silently cut that road is not an option worth keeping.
    *
-   * @param string $command
-   *   The MCP server launch command (e.g. "ddev").
-   * @param array<int, string> $args
-   *   The launch command arguments (e.g. ["drush", "mcp:server"]).
+   * droost serves no MCP server, so there is no launch command to carry:
+   * an agent reaches droost through drush, as the block says.
+   *
    * @param string $blockBody
    *   The AGENTS.md block body (without markers). The pointer writers build
    *   their own import or sentence pointer to it.
    */
   public function __construct(
-    public string $command,
-    public array $args,
     public string $blockBody,
   ) {}
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Droost\Engine\Harness;
 
 /**
- * Registers (and removes) the Droost MCP server + guidance for one AI harness.
+ * Writes (and removes) droost's guidance for one AI harness.
  *
  * Each implementation owns the config/instruction files of a single coding
  * harness (Claude Code, Codex, opencode, qwen-code, gemini-cli) and writes only
@@ -41,7 +41,9 @@ interface HarnessInstallerInterface {
   public function isDetected(string $root): bool;
 
   /**
-   * Installs (writes/upserts) the MCP entry and guidance for this harness.
+   * Installs this harness's guidance.
+   *
+   * A droost MCP entry left from an earlier install is removed.
    *
    * @param string $root
    *   The project root.

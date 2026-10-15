@@ -102,24 +102,23 @@ final class HarnessRegistry {
   }
 
   /**
-   * Installs the MCP server + the droost block across the resolved harnesses.
+   * Installs the droost block across the resolved harnesses.
+   *
+   * Each harness gets the AGENTS.md block or its pointer to it, and loses any
+   * droost MCP server entry an earlier install wrote: droost is reached
+   * through drush, and an editor configured to launch a server that no
+   * longer exists fails at every start.
    *
    * @param string $root
    *   The project root.
-   * @param array{command: string, args: array<int, string>} $server
-   *   The MCP server launch command + args.
    * @param string $harness
    *   The harness selection (auto|all|csv).
    *
    * @return \Droost\Engine\Harness\InstallResult
    *   The aggregated result.
    */
-  public function install(string $root, array $server, string $harness): InstallResult {
-    $context = new InstallContext(
-      $server['command'],
-      $server['args'],
-      $this->block->body(),
-    );
+  public function install(string $root, string $harness): InstallResult {
+    $context = new InstallContext($this->block->body());
     $result = new InstallResult();
     foreach ($this->ordered($this->resolve($harness, $root)) as $installer) {
       $installer->install($root, $context, $result);

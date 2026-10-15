@@ -9,38 +9,39 @@ use Droost\Engine\Site\ExtensionLocatorInterface;
 /**
  * What droost is, in the one wording every agent-facing surface uses.
  *
- * One source, two readers: the AGENTS.md block the harness writes, and the
- * MCP server `instructions` published at the initialize handshake. It used to
- * be the guideline provider's brain directive, stapled to a conventions
- * corpus and a topic catalogue. Droost no longer ships guidance — agents never
- * reached for it — so what remains is the part that was always true: droost
- * is the brain of THIS codebase, and it should be asked before a model's
- * training is trusted.
+ * The AGENTS.md block every harness reads. droost is this codebase's
+ * knowledge and the build's runtime: it is asked by command, through drush,
+ * and it prescribes no way to build. What it says here is where to look,
+ * how to ask, and that the site's own rules are held by gates and a reviewer.
  */
 final readonly class DroostBlock {
 
   /**
-   * The directive: consult this codebase before prior knowledge.
+   * The directive: look in this codebase before trusting prior knowledge.
    */
   public const string DIRECTIVE = <<<'TXT'
   ## Use Droost first
 
-  Droost is the brain of this codebase, and it knows it first-hand: its
-  index, its symbol graph and its wiki are built from this project's own
-  code, core and contrib included. When writing, modifying, reviewing,
-  debugging, or planning ANY Drupal or PHP code in this project, ask it what
-  THIS project actually contains before relying on prior knowledge or walking
-  the file tree — Drupal APIs change across versions and model training lags.
+  Droost knows this codebase first-hand: its index, its symbol graph and its
+  wiki are built from this project's own code, core and contrib included.
+  When writing, modifying, reviewing, debugging, or planning ANY Drupal or PHP
+  code in this project, ask it what THIS project actually contains before
+  relying on prior knowledge or walking the file tree — Drupal APIs change
+  across versions and model training lags.
 
-  - Put your plan to it: `droost_consult` reads the spec and answers each construct and page with what droost believes is good Drupal practice here.
-  - What builds a kind of thing on this site (a generator, a blueprint, a droost tool): `droost_decide`.
+  Ask by command: `drush droost:tool` lists the tools, `drush droost:tool
+  <id> --help` shows one, and `drush droost:tool <id> '<json>'` runs it (on
+  DDEV from the host, `ddev drush …`). Each call boots the site; batch what
+  you can.
+
+  - The site's facts and its house rules: `drush droost:brief`.
   - How this project is put together, and how it documents itself: `droost_wiki`.
   - Find real code in this codebase: `droost_search`, `droost_symbol`, `droost_graph`.
   - What an installed module gives you: `droost_module_docs`.
   - Verify what actually exists: `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
 
-  Ask while you code as much as while you plan. Its answers are advice: you
-  choose how to build, and the record shows both.
+  How you build is your call. The site's house rules say what shape the
+  result must take, and the run's gates and seeker hold it to them.
   TXT;
 
   /**

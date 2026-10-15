@@ -155,6 +155,17 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**0.8.0** — droost is reached through drush, not MCP. The harness
+installers write guidance only (AGENTS.md, and each editor's pointer to it)
+and remove the droost MCP server entry an earlier install registered in
+`.mcp.json`, `.gemini/` and `.qwen/` settings, `.codex/config.toml` and
+`opencode.json`, keeping every other server. `HarnessRegistry::install()`
+takes the root and the harness selection only, and `InstallContext` carries
+only the block body. The directive tells an agent to ask with `drush
+droost:tool` and `drush droost:brief`, and that how to build is its call,
+held to the site's house rules by the run's gates and seeker. `Toml` is
+gone with the server table it wrote.
+
 **0.7.9** rewrites the directive every agent reads (AGENTS.md and the MCP
 handshake): droost knows this codebase first-hand, so put the plan to it
 (`droost_consult`), ask it while coding instead of walking the tree, and

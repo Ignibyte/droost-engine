@@ -11,7 +11,7 @@ use Droost\Engine\Scaffold\ScaffoldResult;
 /**
  * Scaffolds a runnable kernel test skeleton for any module.
  *
- * The mcp-tool and hook blueprints each emit a test alongside their subject;
+ * The hook blueprint emits a test alongside its subject;
  * this one emits a test on its own, so a module scaffolded from any other
  * blueprint (or written by hand) can get a real starting point. What it
  * produces boots the kernel, enables the module, and asserts something true —

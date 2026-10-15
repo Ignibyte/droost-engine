@@ -14,7 +14,7 @@ namespace Droost\Engine\Scaffold;
 interface BlueprintInterface {
 
   /**
-   * The blueprint machine id (e.g. "mcp-tool").
+   * The blueprint machine id (e.g. "hook").
    *
    * @return string
    *   The id.

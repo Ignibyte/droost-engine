@@ -34,9 +34,9 @@ over `DrushCommands` to compute its reserved method list. None of those can
 live in a package that does not depend on Drush, so they stay in the module.
 
 What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
-`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the eight
+`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the seven
 blueprints that emit from templates rather than delegating: access-handler,
-config-schema, hook, kernel-test, mcp-tool, route-subscriber, sdc,
+config-schema, hook, kernel-test, route-subscriber, sdc,
 views-handler. The registry accepts both halves, so a consumer sees one set.
 
 That the two halves are wired together at the container rather than merged is

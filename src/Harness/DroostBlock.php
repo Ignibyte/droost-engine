@@ -30,7 +30,7 @@ final readonly class DroostBlock {
   across versions and model training lags.
 
   Ask by command: `drush droost:tool` lists the tools, `drush droost:tool
-  <id> --help` shows one, and `drush droost:tool <id> '<json>'` runs it (on
+  <id> help` shows one, and `drush droost:tool <id> '<json>'` runs it (on
   DDEV from the host, `ddev drush …`). Each call boots the site; batch what
   you can.
 

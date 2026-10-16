@@ -308,6 +308,57 @@ final class SqliteCodeGraphStorageTest extends TestCase {
   }
 
   /**
+   * A limited edge query keeps the same rows every time: the first by name.
+   */
+  public function testEdgesAreOrderedBeforeTheyAreCut(): void {
+    $edges = [];
+    foreach (['App\\Zed', 'App\\Alpha', 'App\\Mid'] as $fqcn) {
+      $edges[] = $this->edge($fqcn, 'App\\Base');
+      $edges[] = $this->edge('App\\Base', $fqcn);
+    }
+    $this->graph->rebuild([], $edges);
+
+    $this->assertSame(['App\\Alpha', 'App\\Mid'], array_column($this->graph->callers('App\\Base', 2), 'src'));
+    $this->assertSame(['App\\Alpha', 'App\\Mid'], array_column($this->graph->dependencies('App\\Base', 2), 'dst'));
+  }
+
+  /**
+   * A row that is not values fails the rebuild whole; the old graph stands.
+   */
+  public function testBadRowRollsTheRebuildBack(): void {
+    $this->graph->rebuild([$this->symbol('App\\Fresh', 'x')], []);
+    try {
+      $this->graph->rebuild(
+        [$this->symbol('App\\Partial', 'x')],
+        [['src' => 'App\\Partial', 'dst' => new \stdClass(), 'kind' => 'calls', 'file' => 'a.php']],
+      );
+      $this->fail('A non-scalar value must not be stored as an empty string.');
+    }
+    catch (\InvalidArgumentException $e) {
+      $this->assertStringContainsString('"dst" is a stdClass', $e->getMessage());
+    }
+    $this->assertSame(['symbols' => 1, 'edges' => 0], $this->graph->count());
+    $this->assertSame([], $this->graph->findSymbols('Partial'), 'the symbol inserted before the bad edge rolled back');
+  }
+
+  /**
+   * A table another process dropped reads as gone, and comes back on write.
+   */
+  public function testTableDroppedElsewhereIsNotReady(): void {
+    $pdo = new \PDO('sqlite::memory:');
+    $graph = new SqliteCodeGraphStorage($pdo);
+    $graph->rebuild([$this->symbol('App\\One', 'x')], []);
+    $this->assertTrue($graph->isReady());
+
+    $pdo->exec('DROP TABLE droost_search_symbol');
+    $this->assertFalse($graph->isReady());
+    $this->assertSame([], $graph->findSymbols('One'));
+
+    $graph->addSymbol('App\\Two', 'class', 'b.php', 1, 'x');
+    $this->assertSame(['App\\Two'], array_column($graph->findSymbols('Two'), 'fqcn'));
+  }
+
+  /**
    * Builds a symbol row.
    *
    * @param string $fqcn

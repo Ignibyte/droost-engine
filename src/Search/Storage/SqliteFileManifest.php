@@ -190,14 +190,18 @@ final class SqliteFileManifest implements FileManifestInterface {
    *   TRUE when it does.
    */
   private function tableExists(): bool {
-    if ($this->ready) {
-      return TRUE;
-    }
+    // Asked every time, never cached: the index is a file other processes
+    // share (an index run, an uninstall, vendor/bin/droost), and a table one
+    // of them dropped must not read as here.
     $statement = $this->pdo->prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
     );
     $statement->execute([self::TABLE]);
-    return $statement->fetchColumn() !== FALSE;
+    $exists = $statement->fetchColumn() !== FALSE;
+    if (!$exists) {
+      $this->ready = FALSE;
+    }
+    return $exists;
   }
 
 }

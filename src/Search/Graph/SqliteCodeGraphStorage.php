@@ -413,7 +413,12 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
     }
     $statement = $this->pdo->prepare(
       'SELECT src, dst, kind FROM ' . self::EDGES
-      . ' WHERE ' . $column . ' = ? LIMIT ' . max(1, $limit)
+      . ' WHERE ' . $column . ' = ?'
+      // Ordered before the cut, because the limit keeps only the first rows:
+      // without an order the database chooses which, and two identical
+      // indexes could answer droost_graph differently.
+      . ' ORDER BY ' . ($column === 'src' ? 'dst' : 'src') . ' COLLATE NOCASE, kind'
+      . ' LIMIT ' . max(1, $limit)
     );
     $statement->execute([$value]);
     $rows = [];
@@ -466,7 +471,13 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       foreach ($fields as $field) {
         // 'line' is an integer column; default it to 0, others to ''.
         $value = $row[$field] ?? ($field === 'line' ? 0 : '');
-        $values[] = is_scalar($value) ? $value : '';
+        // A value that is not one is the caller's bug, and storing '' for it
+        // would commit a graph that quietly lies: throw, so the transaction
+        // rolls back and the previous graph stands.
+        if (!is_scalar($value)) {
+          throw new \InvalidArgumentException(sprintf('A %s row\'s "%s" is a %s, not a value.', $table, $field, get_debug_type($value)));
+        }
+        $values[] = $value;
       }
       $statement->execute($values);
     }
@@ -500,14 +511,18 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
    *   TRUE when it does.
    */
   private function tableExists(string $table): bool {
-    if ($this->ready) {
-      return TRUE;
-    }
+    // Asked every time, never cached: the index is a file other processes
+    // share (an index run, an uninstall, vendor/bin/droost), and a table one
+    // of them dropped must not read as here.
     $statement = $this->pdo->prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
     );
     $statement->execute([$table]);
-    return $statement->fetchColumn() !== FALSE;
+    $exists = $statement->fetchColumn() !== FALSE;
+    if (!$exists) {
+      $this->ready = FALSE;
+    }
+    return $exists;
   }
 
   /**

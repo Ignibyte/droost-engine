@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Tests\Search;
 
-use Droost\Engine\Search\Chunker\ChunkerRegistry;
-use Droost\Engine\Search\Chunker\DocChunker;
-use Droost\Engine\Search\Chunker\PhpChunker;
-use Droost\Engine\Search\Chunker\TwigChunker;
 use Droost\Engine\Search\Graph\PhpGraphExtractor;
 use Droost\Engine\Search\Graph\SqliteCodeGraphStorage;
 use Droost\Engine\Search\Graph\YamlGraphExtractor;
@@ -70,8 +66,8 @@ final class RepoIndexerTest extends TestCase {
       "<?php\n\nnamespace Vendor\\Evil;\n\nclass Sneaky {}\n",
     );
 
-    $this->graph = SqliteCodeGraphStorage::open(':memory:');
-    $this->manifest = SqliteFileManifest::open(':memory:');
+    $this->graph = new SqliteCodeGraphStorage(new \PDO('sqlite::memory:'));
+    $this->manifest = new SqliteFileManifest(new \PDO('sqlite::memory:'));
   }
 
   /**
@@ -91,7 +87,6 @@ final class RepoIndexerTest extends TestCase {
     $this->assertSame('full', $report['mode']);
     // info.yml is not an indexable type; the two PHP files and the README are.
     $this->assertSame(3, $report['files']);
-    $this->assertGreaterThan(0, $report['chunks']);
     $this->assertGreaterThan(0, $report['symbols']);
 
     // The questions droost_graph would ask, answered with no site at all.
@@ -185,7 +180,6 @@ final class RepoIndexerTest extends TestCase {
   private function indexer(): RepoIndexer {
     return new RepoIndexer(
       new RepoSourceDiscovery($this->root),
-      new ChunkerRegistry(new PhpChunker(), new DocChunker(), new TwigChunker()),
       new PhpGraphExtractor(),
       new YamlGraphExtractor(),
       $this->manifest,

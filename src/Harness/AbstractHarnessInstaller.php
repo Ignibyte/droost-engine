@@ -86,37 +86,6 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
   }
 
   /**
-   * Deletes a project-relative directory and its files (one level + nested).
-   *
-   * @param string $root
-   *   The project root.
-   * @param string $relative
-   *   The relative directory path.
-   */
-  protected function deleteDir(string $root, string $relative): void {
-    $path = $root . '/' . $relative;
-    // A symlinked directory: remove the link, never recurse into its target
-    // (which could be user data outside our tree).
-    if (is_link($path)) {
-      unlink($path);
-      return;
-    }
-    if (!is_dir($path)) {
-      return;
-    }
-    $items = new \RecursiveIteratorIterator(
-      new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-      \RecursiveIteratorIterator::CHILD_FIRST,
-    );
-    foreach ($items as $item) {
-      if ($item instanceof \SplFileInfo) {
-        $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
-      }
-    }
-    rmdir($path);
-  }
-
-  /**
    * Writes droost's MCP server entry, or removes it when there is none.
    *
    * @param string $root
@@ -139,11 +108,15 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
       $result->addWarning(sprintf('%s is present but not valid JSON; left unchanged to avoid destroying its contents. Fix it and re-run.', $relative));
       return;
     }
-    $data = JsonMerge::read($root . '/' . $relative);
-    $data = JsonMerge::setPath($data, $parent, 'droost', [
+    $before = JsonMerge::read($root . '/' . $relative);
+    $data = JsonMerge::mergePath($before, $parent, 'droost', [
       'command' => $context->server['command'],
       'args' => $context->server['args'],
     ]);
+    if (is_file($root . '/' . $relative) && $data == $before) {
+      // Already as droost writes it: leave the file, and its formatting, alone.
+      return;
+    }
     $this->write($root, $relative, JsonMerge::encode($data));
     $result->addWritten($relative);
   }

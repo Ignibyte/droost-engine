@@ -43,11 +43,11 @@ final class CodexHarnessInstaller extends AbstractHarnessInstaller {
       return;
     }
     $existing = $this->read($root, '.codex/config.toml');
-    // Respect a hand-added table outside our managed region rather than
-    // duplicating it. Match the table header at line start (not in a comment).
-    if (!ManagedRegion::hasAnyMarker($existing, Markers::TOML_BEGIN, Markers::TOML_END)
-      && preg_match('/^\s*\[mcp_servers\.droost\]/m', $existing) === 1) {
-      $result->addWarning('.codex/config.toml already defines [mcp_servers.droost] outside the Droost region; left unchanged.');
+    // Respect a hand-added droost server outside our managed region rather
+    // than defining it twice, which is invalid TOML: Codex would then read
+    // none of the file.
+    if (self::definesDroostOutsideTheRegion($existing)) {
+      $result->addWarning('.codex/config.toml already defines mcp_servers.droost outside the Droost region; left unchanged.');
       return;
     }
     $body = Toml::mcpServerTable('droost', $context->server['command'], $context->server['args']);
@@ -61,6 +61,50 @@ final class CodexHarnessInstaller extends AbstractHarnessInstaller {
     $this->write($root, '.codex/config.toml', $new);
     $result->addWritten('.codex/config.toml');
     $this->warnOnTrailingKeys($new, $result);
+  }
+
+  /**
+   * Whether the file defines the droost server anywhere but droost's region.
+   *
+   * Every spelling TOML allows: the table header (`[mcp_servers.droost]`,
+   * quoted or spaced, or one of its sub-tables), a dotted key
+   * (`mcp_servers.droost.command = …`), and a key under `[mcp_servers]`
+   * (`droost = { … }`, `droost.command = …`). Comments are not definitions.
+   *
+   * @param string $toml
+   *   The file's content.
+   *
+   * @return bool
+   *   TRUE when a definition outside the region was found.
+   */
+  private static function definesDroostOutsideTheRegion(string $toml): bool {
+    $begin = strpos($toml, Markers::TOML_BEGIN);
+    $end = strpos($toml, Markers::TOML_END);
+    if ($begin !== FALSE && $end !== FALSE && $end > $begin) {
+      $toml = substr($toml, 0, $begin) . substr($toml, $end + strlen(Markers::TOML_END));
+    }
+    $droost = '(?:droost|"droost"|\'droost\')';
+    $table = '';
+    foreach (preg_split('/\R/', $toml) ?: [] as $line) {
+      $line = trim($line);
+      if ($line === '' || str_starts_with($line, '#')) {
+        continue;
+      }
+      if (preg_match('/^\[\[?\s*([^\]]+?)\s*\]\]?/', $line, $header) === 1) {
+        $table = (string) preg_replace('/\s*\.\s*/', '.', $header[1]);
+        if (preg_match('/^mcp_servers\.' . $droost . '(?:\.|$)/', $table) === 1) {
+          return TRUE;
+        }
+        continue;
+      }
+      if ($table === '' && preg_match('/^mcp_servers\s*\.\s*' . $droost . '\s*[.=]/', $line) === 1) {
+        return TRUE;
+      }
+      if ($table === 'mcp_servers' && preg_match('/^' . $droost . '\s*[.=]/', $line) === 1) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**

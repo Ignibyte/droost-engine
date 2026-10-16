@@ -15,13 +15,13 @@ Areas (each depends only on `Support` and `Site`, never on a sibling):
 | Area | What it holds | Landed |
 | --- | --- | --- |
 | `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
-| `Site` | What the engine may know about the site it runs against: the extension-locator port and the no-site implementation | yes |
+| `Site` | What the engine may know about the site it runs against (its core version), and who owns an extension's code | yes |
 | `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
 | `Skills` | Skill emitters: droost's own skill files rendered as SKILL.md | yes |
 | `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
 | `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
 | `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
-| `Search` | Code search and graph core: chunkers, extractors, index diffing | partly — stores and indexer still to come |
+| `Search` | Code search and graph core: chunkers, extractors, index diffing, the SQLite stores droost's code index lives in, and the repo-only indexer (`bin/droost-index`) | yes |
 
 ## Why `Scaffold` is a partial lift
 
@@ -34,9 +34,10 @@ over `DrushCommands` to compute its reserved method list. None of those can
 live in a package that does not depend on Drush, so they stay in the module.
 
 What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
-`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the seven
+`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the thirteen
 blueprints that emit from templates rather than delegating: access-handler,
-config-schema, hook, kernel-test, route-subscriber, sdc,
+ckeditor5-plugin, config-schema, functional-test, hook, kernel-test,
+media-source, migrate, plugin-deriver, recipe, route-subscriber, sdc and
 views-handler. The registry accepts both halves, so a consumer sees one set.
 
 That the two halves are wired together at the container rather than merged is
@@ -149,7 +150,30 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
-**Unreleased** — droost's MCP server comes back as a second door, a thin
+**Unreleased**:
+- An install or uninstall keeps every JSON object the user had as an object
+  (another server's `"env": {}` was rewritten as `[]`), keeps the keys a user
+  added to droost's own entry (`env`, a timeout), and leaves a config that
+  already says what droost would write untouched, formatting and all.
+- Codex: a droost server the user wrote in any TOML spelling (quoted,
+  spaced, a sub-table, a dotted key, a key under `[mcp_servers]`) is left
+  alone rather than defined twice, and every control character in a string
+  is escaped.
+- Uninstall removes a droost skill only as droost wrote it: a user's file
+  beside it, an edited SKILL.md or a symlink keeps the directory, with a
+  warning. A skill's frontmatter name must be a plain name.
+- The SQLite stores: the fan summary is ordered before its cap; a vector or
+  meta that will not encode rolls its batch back (invalid UTF-8 in meta is
+  substituted); a write re-makes a table another process dropped. The
+  unused `open()` factories are gone.
+- `bin/droost-index`: a query (`--find`, `--callers`, `--fan`) refuses a
+  missing index and opens it read-only, and an index an older extractor wrote
+  (`RepoIndexer::INDEXER_VERSION`, kept as SQLite's `user_version`) is
+  rebuilt whole. `RepoIndexer` no longer chunks files only to count chunks.
+- Removed as unused: `EngineInfo`, `InstallResult::addSkipped()`, and the
+  locator port's `installed()` and `path()` (only `coreVersion()` is asked).
+
+**0.10.0** — droost's MCP server comes back as a second door, a thin
 server that holds no Drupal and runs each call as a fresh command.
 `HarnessRegistry::install(string $root, string $harness, ?array $server = NULL)`:
 with a server (`['command' => …, 'args' => […]]`) every harness writes droost's
@@ -159,6 +183,15 @@ under `mcpServers`; a fenced `[mcp_servers.droost]` table in
 is removed, as in 0.8.0. `InstallContext` carries the optional server, and
 `Toml` and `JsonMerge::setPath` are back. The directive says droost's tools
 answer through MCP or by command, with the same record.
+
+**0.9.0** — the SQLite stores order edges before a limit, throw on a row
+that is not values (the rebuild rolls back instead of storing `''`), and ask
+whether a table exists every time, since droost's code index is a file other
+processes share. The AGENTS block names both commands: `vendor/bin/droost`
+for the code, `drush droost:tool` for the live site. Dead code removed:
+`JsonMerge::setPath` (back in 0.10.0), `InstallResult::merge()`,
+`ScopeClassifier::knowsComposer()`, `Yaml::decodeOrNull()` and the locator
+port's `isInstalled()`.
 
 **0.8.0** — droost is reached through drush, not MCP. The harness
 installers write guidance only (AGENTS.md, and each editor's pointer to it)
@@ -214,7 +247,8 @@ composer require droost/engine
 ```
 
 Requires PHP 8.3 or newer. `ext-pdo_sqlite` is suggested — it backs the
-SQLite code-graph and vector stores used for repo-only (no site) operation.
+SQLite stores: droost's code index on a site, and `bin/droost-index` on a
+repository with none.
 
 ## Development
 

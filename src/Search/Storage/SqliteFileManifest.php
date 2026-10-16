@@ -26,11 +26,6 @@ final class SqliteFileManifest implements FileManifestInterface {
   private const string TABLE = 'droost_search_file';
 
   /**
-   * Whether the schema has been ensured on this connection.
-   */
-  private bool $ready = FALSE;
-
-  /**
    * Constructs a SqliteFileManifest.
    *
    * @param \PDO $pdo
@@ -49,32 +44,12 @@ final class SqliteFileManifest implements FileManifestInterface {
   }
 
   /**
-   * Opens a SQLite-backed manifest at a file path.
-   *
-   * @param string $path
-   *   The database file path; the directory must exist. ":memory:" is
-   *   accepted and is what the tests use.
-   *
-   * @return self
-   *   The manifest.
-   *
-   * @throws \RuntimeException
-   *   When ext-pdo_sqlite is unavailable.
-   */
-  public static function open(string $path): self {
-    if (!in_array('sqlite', \PDO::getAvailableDrivers(), TRUE)) {
-      throw new \RuntimeException('The SQLite manifest needs ext-pdo_sqlite, which is not loaded.');
-    }
-    return new self(new \PDO('sqlite:' . $path));
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function ensureSchema(): void {
-    if ($this->ready) {
-      return;
-    }
+    // Never short-circuited on a flag: another process sharing the file (an
+    // index run, an uninstall) may have dropped the table since, and
+    // CREATE … IF NOT EXISTS costs a schema lookup.
     $this->pdo->exec(
       'CREATE TABLE IF NOT EXISTS ' . self::TABLE . ' ('
       . 'file TEXT NOT NULL PRIMARY KEY, '
@@ -83,7 +58,6 @@ final class SqliteFileManifest implements FileManifestInterface {
       . "type TEXT NOT NULL DEFAULT '', "
       . 'indexed_at INTEGER NOT NULL DEFAULT 0)'
     );
-    $this->ready = TRUE;
   }
 
   /**
@@ -197,11 +171,7 @@ final class SqliteFileManifest implements FileManifestInterface {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
     );
     $statement->execute([self::TABLE]);
-    $exists = $statement->fetchColumn() !== FALSE;
-    if (!$exists) {
-      $this->ready = FALSE;
-    }
-    return $exists;
+    return $statement->fetchColumn() !== FALSE;
   }
 
 }

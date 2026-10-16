@@ -26,13 +26,50 @@ final class JsonMerge {
     if (!is_file($path)) {
       return [];
     }
-    $decoded = json_decode((string) file_get_contents($path), TRUE);
+    // Objects are decoded as objects, then turned into arrays where that is
+    // safe: an empty object, or one whose keys read as a list, stays an
+    // object, so encode() writes it back as `{}`. Decoding straight to arrays
+    // turned another server's `"env": {}` into `"env": []`, which its client
+    // may reject.
+    $decoded = self::arrays(json_decode((string) file_get_contents($path), FALSE));
     if (!is_array($decoded)) {
       return [];
     }
     // A JSON config file's top level is an object → string keys.
     /** @var array<string, mixed> $decoded */
     return $decoded;
+  }
+
+  /**
+   * A decoded value with objects as arrays where JSON keeps its shape.
+   *
+   * @param mixed $value
+   *   The value json_decode() gave with objects as stdClass.
+   *
+   * @return mixed
+   *   Arrays for objects with keys that cannot read as a list, the empty or
+   *   list-keyed object kept as an object, everything else unchanged.
+   */
+  private static function arrays(mixed $value): mixed {
+    if (is_array($value)) {
+      return array_map(self::arrays(...), $value);
+    }
+    if (!$value instanceof \stdClass) {
+      return $value;
+    }
+    $properties = get_object_vars($value);
+    $converted = [];
+    foreach ($properties as $key => $child) {
+      $converted[$key] = self::arrays($child);
+    }
+    if ($converted === [] || array_is_list($converted)) {
+      $object = new \stdClass();
+      foreach ($converted as $key => $child) {
+        $object->{$key} = $child;
+      }
+      return $object;
+    }
+    return $converted;
   }
 
   /**
@@ -95,6 +132,29 @@ final class JsonMerge {
     }
     $data[$parent][$key] = $value;
     return $data;
+  }
+
+  /**
+   * Merges keys into the value at a two-level key path, keeping the others.
+   *
+   * A re-install sets droost's own keys (its command) and keeps whatever the
+   * user added to the same entry (`env`, `cwd`, a timeout).
+   *
+   * @param array<string, mixed> $data
+   *   The data to mutate.
+   * @param string $parent
+   *   The parent key (e.g. "mcpServers").
+   * @param string $key
+   *   The child key (e.g. "droost").
+   * @param array<string, mixed> $values
+   *   The keys to set.
+   *
+   * @return array<string, mixed>
+   *   The mutated data.
+   */
+  public static function mergePath(array $data, string $parent, string $key, array $values): array {
+    $current = is_array($data[$parent] ?? NULL) && is_array($data[$parent][$key] ?? NULL) ? $data[$parent][$key] : [];
+    return self::setPath($data, $parent, $key, array_replace($current, $values));
   }
 
   /**

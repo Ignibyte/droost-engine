@@ -17,10 +17,6 @@
 
 declare(strict_types=1);
 
-use Droost\Engine\Search\Chunker\ChunkerRegistry;
-use Droost\Engine\Search\Chunker\DocChunker;
-use Droost\Engine\Search\Chunker\PhpChunker;
-use Droost\Engine\Search\Chunker\TwigChunker;
 use Droost\Engine\Search\Graph\PhpGraphExtractor;
 use Droost\Engine\Search\Graph\SqliteCodeGraphStorage;
 use Droost\Engine\Search\Graph\YamlGraphExtractor;
@@ -58,9 +54,18 @@ if ($root === FALSE || !is_dir($root)) {
   exit(1);
 }
 $database = is_string($options['db'] ?? NULL) ? $options['db'] : $root . '/.droost-index.sqlite';
+// A query reads the index and never makes one: opening a missing file would
+// create an empty index and answer from it as if the repository had nothing.
+$query = is_string($options['find'] ?? NULL) || is_string($options['callers'] ?? NULL) || is_string($options['fan'] ?? NULL);
+if ($query && !is_file($database)) {
+  fwrite(STDERR, 'No index at ' . $database . ': run droost-index ' . $root . " first.\n");
+  exit(1);
+}
 
 try {
-  $pdo = new PDO('sqlite:' . $database);
+  $pdo = $query
+    ? new PDO('sqlite:' . $database, NULL, NULL, [PDO::SQLITE_ATTR_OPEN_FLAGS => PDO::SQLITE_OPEN_READONLY])
+    : new PDO('sqlite:' . $database);
 }
 catch (Throwable $e) {
   fwrite(STDERR, 'Could not open ' . $database . ': ' . $e->getMessage() . "\n");
@@ -72,6 +77,10 @@ $graph = new SqliteCodeGraphStorage($pdo);
 $manifest = new SqliteFileManifest($pdo);
 
 // Query modes: answer from the existing index and exit.
+if ($query && !$graph->isReady()) {
+  fwrite(STDERR, "No graph yet — index first.\n");
+  exit(1);
+}
 if (is_string($options['find'] ?? NULL)) {
   foreach ($graph->findSymbols($options['find'], 40) as $symbol) {
     printf("%-12s %s\n             %s:%d\n", $symbol['kind'], $symbol['fqcn'], $symbol['file'], $symbol['line']);
@@ -117,7 +126,6 @@ if (is_string($options['fan'] ?? NULL)) {
 
 $indexer = new RepoIndexer(
   new RepoSourceDiscovery($root, ($options['tests'] ?? FALSE) === TRUE),
-  new ChunkerRegistry(new PhpChunker(), new DocChunker(), new TwigChunker()),
   new PhpGraphExtractor(),
   new YamlGraphExtractor(),
   $manifest,
@@ -126,9 +134,14 @@ $indexer = new RepoIndexer(
 );
 
 $started = microtime(TRUE);
-$report = $indexer->index(($options['full'] ?? FALSE) === TRUE);
+// An index an older extractor wrote is rebuilt whole: an incremental run
+// re-parses only changed files, so the rows the old extractor wrote for the
+// rest would stay.
+$stored = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+$report = $indexer->index(($options['full'] ?? FALSE) === TRUE || $stored !== RepoIndexer::INDEXER_VERSION);
+$pdo->exec('PRAGMA user_version = ' . RepoIndexer::INDEXER_VERSION);
 printf(
-  "%s index of %s in %.1fs\n  %d files (+%d ~%d -%d =%d)\n  %d chunks, %d symbols, %d edges\n  %s\n",
+  "%s index of %s in %.1fs\n  %d files (+%d ~%d -%d =%d)\n  %d symbols, %d edges\n  %s\n",
   ucfirst($report['mode']),
   $root,
   microtime(TRUE) - $started,
@@ -137,7 +150,6 @@ printf(
   $report['changed'],
   $report['removed'],
   $report['unchanged'],
-  $report['chunks'],
   $report['symbols'],
   $report['edges'],
   $database,

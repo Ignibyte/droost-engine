@@ -54,10 +54,10 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
       $result->addWarning('opencode.json is present but not valid JSON; left unchanged to avoid destroying its contents. Fix it and re-run.');
       return;
     }
-    $data = JsonMerge::read($root . '/opencode.json');
+    $before = JsonMerge::read($root . '/opencode.json');
     $data = $context->server === NULL
-      ? JsonMerge::unsetPath($data, 'mcp', 'droost')
-      : JsonMerge::setPath($data, 'mcp', 'droost', [
+      ? JsonMerge::unsetPath($before, 'mcp', 'droost')
+      : JsonMerge::mergePath($before, 'mcp', 'droost', [
         'type' => 'local',
         'command' => [$context->server['command'], ...$context->server['args']],
         'enabled' => TRUE,
@@ -67,6 +67,9 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
       $instructions[] = self::AGENTS_POINTER;
     }
     $data['instructions'] = array_values($instructions);
+    if (is_file($root . '/opencode.json') && $data == $before) {
+      return;
+    }
     $this->write($root, 'opencode.json', JsonMerge::encode($data));
     $result->addWritten('opencode.json');
   }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Search;
 
-use Droost\Engine\Search\Chunker\ChunkerRegistry;
 use Droost\Engine\Search\Graph\CodeGraphStorageInterface;
 use Droost\Engine\Search\Graph\PhpGraphExtractor;
 use Droost\Engine\Search\Graph\YamlGraphExtractor;
@@ -22,18 +21,20 @@ use Droost\Engine\Search\Graph\YamlGraphExtractor;
  * the same ports. So a repo-only index is the same shape as a site-backed one,
  * minus the parts that are genuinely about a running site.
  *
- * Embedding is deliberately absent. Lexical symbol search and the code graph
- * need no model, and they are what makes an unfamiliar checkout navigable;
- * pass the vectors in yourself if you have a backend.
+ * Embedding, and so chunking, is deliberately absent. Lexical symbol search
+ * and the code graph need no model, and they are what makes an unfamiliar
+ * checkout navigable.
  */
 final class RepoIndexer {
 
   /**
    * The indexer output version; bumping it forces a full rebuild.
    *
-   * Kept as its own constant rather than shared with the Drupal indexer: the
-   * two write different corpora, and coupling their versions would force
-   * pointless rebuilds on one when the other's chunkers change. v2: a
+   * The binary, bin/droost-index, stores it in the index (SQLite's
+   * user_version) and rebuilds whole when the stored one differs. Kept as its
+   * own constant rather than shared with the Drupal indexer: the two write
+   * different corpora, and coupling their versions would force pointless
+   * rebuilds on one when the other's extractors change. v2: a
    * declaration guarded by its own absence is no longer a symbol (F-63).
    * v3: a hook an api.php documents is a `hook:NAME` symbol, so an
    * implementation's edge reaches the module that owns the hook (B3).
@@ -45,8 +46,6 @@ final class RepoIndexer {
    *
    * @param \Droost\Engine\Search\RepoSourceDiscovery $discovery
    *   Finds the files.
-   * @param \Droost\Engine\Search\Chunker\ChunkerRegistry $chunkers
-   *   Splits file content into chunks.
    * @param \Droost\Engine\Search\Graph\PhpGraphExtractor $php
    *   Extracts symbols and edges from PHP.
    * @param \Droost\Engine\Search\Graph\YamlGraphExtractor $yaml
@@ -60,7 +59,6 @@ final class RepoIndexer {
    */
   public function __construct(
     private readonly RepoSourceDiscovery $discovery,
-    private readonly ChunkerRegistry $chunkers,
     private readonly PhpGraphExtractor $php,
     private readonly YamlGraphExtractor $yaml,
     private readonly FileManifestInterface $manifest,
@@ -80,9 +78,9 @@ final class RepoIndexer {
    *   The indexing timestamp to record; defaults to now. Injectable so a test
    *   can assert the manifest without racing the clock.
    *
-   * @return array{files: int, chunks: int, symbols: int, edges: int, mode: string, added: int, changed: int, removed: int, unchanged: int}
-   *   Counts: files discovered, chunks produced this run, the post-run graph
-   *   totals, the mode that ran, and the four delta counts.
+   * @return array{files: int, symbols: int, edges: int, mode: string, added: int, changed: int, removed: int, unchanged: int}
+   *   Counts: files discovered, the post-run graph totals, the mode that ran,
+   *   and the four delta counts.
    */
   public function index(bool $full = FALSE, ?int $timestamp = NULL): array {
     $stored = $this->manifest->all();
@@ -104,7 +102,6 @@ final class RepoIndexer {
       ? new IndexDelta(array_keys($hashes), [], [], 0)
       : IndexDiffer::diff($stored, $hashes, ['repo']);
 
-    $chunks = 0;
     $symbols = [];
     $edges = [];
     foreach ($delta->toParse() as $path) {
@@ -116,7 +113,6 @@ final class RepoIndexer {
       if ($content === NULL) {
         continue;
       }
-      $chunks += count($this->chunkers->chunk($file['type'], $content, $path, $file['module']));
       $extracted = match ($file['type']) {
         'php' => $this->php->extract($content, $path, $file['module']),
         'yaml' => $this->yaml->extract($content, $path, $file['module']),
@@ -167,7 +163,6 @@ final class RepoIndexer {
     $counts = $this->graph->count();
     return [
       'files' => count($files),
-      'chunks' => $chunks,
       'symbols' => $counts['symbols'],
       'edges' => $counts['edges'],
       'mode' => $isFull ? 'full' : 'incremental',

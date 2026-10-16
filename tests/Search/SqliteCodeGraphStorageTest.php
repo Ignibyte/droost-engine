@@ -34,7 +34,7 @@ final class SqliteCodeGraphStorageTest extends TestCase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->graph = SqliteCodeGraphStorage::open(':memory:');
+    $this->graph = new SqliteCodeGraphStorage(new \PDO('sqlite::memory:'));
   }
 
   /**
@@ -278,6 +278,46 @@ final class SqliteCodeGraphStorageTest extends TestCase {
     $whole = $this->graph->fanSummary('alpha', 100);
     $this->assertFalse($whole['truncated']);
     $this->assertSame(10, $whole['outbound_edges']);
+  }
+
+  /**
+   * Past the cap, the same edges are counted whatever order they were written.
+   */
+  public function testFanSummaryCutIsTheSameWhateverTheWriteOrder(): void {
+    $symbols = [
+      $this->symbol('A\\One', 'alpha'),
+      $this->symbol('B\\Beta1', 'beta'),
+      $this->symbol('B\\Beta2', 'beta'),
+      $this->symbol('C\\Gamma1', 'gamma'),
+      $this->symbol('C\\Gamma2', 'gamma'),
+    ];
+    $edges = [
+      $this->edge('A\\One', 'C\\Gamma1'),
+      $this->edge('A\\One', 'C\\Gamma2'),
+      $this->edge('A\\One', 'B\\Beta1'),
+      $this->edge('A\\One', 'B\\Beta2'),
+    ];
+    $first = new SqliteCodeGraphStorage(new \PDO('sqlite::memory:'));
+    $first->rebuild($symbols, $edges);
+    $second = new SqliteCodeGraphStorage(new \PDO('sqlite::memory:'));
+    $second->rebuild($symbols, array_reverse($edges));
+
+    $this->assertSame($first->fanSummary('alpha', 2), $second->fanSummary('alpha', 2));
+    $this->assertSame('beta', $first->fanSummary('alpha', 2)['outbound'][0]['module'], 'the first by name are kept');
+  }
+
+  /**
+   * A table another process dropped is made again by the next write.
+   */
+  public function testWriteAfterTheTableWasDroppedElsewhere(): void {
+    $pdo = new \PDO('sqlite::memory:');
+    $graph = new SqliteCodeGraphStorage($pdo);
+    $graph->rebuild([$this->symbol('App\\One', 'x')], []);
+    $pdo->exec('DROP TABLE droost_search_symbol');
+
+    $graph->applyDelta([], [$this->symbol('App\\Two', 'x')], []);
+
+    $this->assertSame(['App\\Two'], array_column($graph->findSymbols('Two'), 'fqcn'));
   }
 
   /**

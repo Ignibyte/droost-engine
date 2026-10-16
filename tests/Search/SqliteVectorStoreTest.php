@@ -32,7 +32,7 @@ final class SqliteVectorStoreTest extends TestCase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->store = SqliteVectorStore::open(':memory:');
+    $this->store = new SqliteVectorStore(new \PDO('sqlite::memory:'));
   }
 
   /**
@@ -173,6 +173,49 @@ final class SqliteVectorStoreTest extends TestCase {
     $this->assertSame(1, $this->store->count());
     $this->store->delete();
     $this->assertSame(0, $this->store->count());
+  }
+
+  /**
+   * A vector that will not encode fails its batch whole.
+   */
+  public function testAnUnencodableVectorRollsTheBatchBack(): void {
+    $this->store->upsertBatch([['corpus' => 'code', 'ref' => 'kept', 'vector' => [1.0, 0.0], 'meta' => []]], 2);
+    try {
+      $this->store->upsertBatch([
+        ['corpus' => 'code', 'ref' => 'good', 'vector' => [1.0, 0.0], 'meta' => []],
+        ['corpus' => 'code', 'ref' => 'bad', 'vector' => [NAN, 0.0], 'meta' => []],
+      ], 2);
+      $this->fail('A NAN must not be stored as an empty vector.');
+    }
+    catch (\JsonException) {
+      // Expected: the batch rolled back.
+    }
+    $this->assertSame(1, $this->store->count(), 'the row written before the bad one rolled back');
+  }
+
+  /**
+   * Meta with invalid UTF-8 is kept, substituted, and still filters.
+   */
+  public function testInvalidUtf8MetaIsKept(): void {
+    $meta = ['scope' => 'custom', 'heading' => "caf\xE9"];
+    $this->store->upsertBatch([['corpus' => 'doc', 'ref' => 'latin1', 'vector' => [1.0, 0.0], 'meta' => $meta]], 2);
+
+    $hits = $this->store->search([1.0, 0.0], 10, NULL, ['scope' => 'custom']);
+    $this->assertSame(['latin1'], array_column($hits, 'ref'), 'the chunk is found by its scope');
+  }
+
+  /**
+   * A table another process dropped is made again by the next write.
+   */
+  public function testWriteAfterTheTableWasDroppedElsewhere(): void {
+    $pdo = new \PDO('sqlite::memory:');
+    $store = new SqliteVectorStore($pdo);
+    $store->upsertBatch([['corpus' => 'code', 'ref' => 'a', 'vector' => [1.0, 0.0], 'meta' => []]], 2);
+    $pdo->exec('DROP TABLE droost_search_vectors');
+
+    $store->upsertBatch([['corpus' => 'code', 'ref' => 'b', 'vector' => [1.0, 0.0], 'meta' => []]], 2);
+
+    $this->assertSame(1, $store->count());
   }
 
   /**

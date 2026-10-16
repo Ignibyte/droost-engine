@@ -31,6 +31,13 @@ final class Toml {
       ['\\\\', '\\"', '\\n', '\\r', '\\t'],
       $value,
     );
+    // TOML forbids every other control character in a basic string: a raw
+    // one makes the whole file invalid, and Codex then reads none of it.
+    $escaped = (string) preg_replace_callback(
+      '/[\x00-\x1f\x7f]/',
+      static fn (array $m): string => sprintf('\\u%04X', ord($m[0])),
+      $escaped,
+    );
     return '"' . $escaped . '"';
   }
 

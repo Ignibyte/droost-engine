@@ -41,23 +41,35 @@ final readonly class SkillProvider {
     $paths = glob($this->skillsDir . '/*.md') ?: [];
     sort($paths);
     foreach ($paths as $path) {
-      $skills[] = $this->parse((string) file_get_contents($path), basename($path, '.md'));
+      $skill = $this->parse((string) file_get_contents($path), basename($path, '.md'));
+      if ($skill !== NULL) {
+        $skills[] = $skill;
+      }
     }
     return $skills;
   }
 
   /**
+   * A name a skill may have: it becomes a directory under `.claude/skills/`.
+   */
+  private const string NAME = '/^[a-z0-9][a-z0-9_-]*$/';
+
+  /**
    * Parses a skill file's frontmatter and body.
+   *
+   * The frontmatter name becomes a directory, so one that is not a plain
+   * name (`../x`, a slash, a capital) falls back to the file's own name, and
+   * a skill with neither is not rendered.
    *
    * @param string $content
    *   The raw file content.
    * @param string $fallbackName
-   *   The name to use if frontmatter omits one.
+   *   The name to use if frontmatter omits one or gives one that is no name.
    *
-   * @return \Droost\Engine\Skills\Skill
-   *   The parsed skill.
+   * @return \Droost\Engine\Skills\Skill|null
+   *   The parsed skill, or NULL when it has no usable name.
    */
-  private function parse(string $content, string $fallbackName): Skill {
+  private function parse(string $content, string $fallbackName): ?Skill {
     $name = $fallbackName;
     $description = '';
     $body = $content;
@@ -67,7 +79,7 @@ final readonly class SkillProvider {
         if (preg_match('/^(name|description):\s*(.*)$/', trim($line), $kv) === 1) {
           $value = $this->scalarValue(trim($kv[2]));
           if ($kv[1] === 'name') {
-            $name = $value === '' ? $name : $value;
+            $name = preg_match(self::NAME, $value) === 1 ? $value : $name;
           }
           else {
             $description = $value;
@@ -75,7 +87,7 @@ final readonly class SkillProvider {
         }
       }
     }
-    return new Skill($name, $description, $body);
+    return preg_match(self::NAME, $name) === 1 ? new Skill($name, $description, $body) : NULL;
   }
 
   /**

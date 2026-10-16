@@ -39,11 +39,6 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
   private const string LIKE_ESCAPE = " ESCAPE '\\'";
 
   /**
-   * Whether the schema has been ensured on this connection.
-   */
-  private bool $ready = FALSE;
-
-  /**
    * Constructs a SqliteCodeGraphStorage.
    *
    * @param \PDO $pdo
@@ -56,31 +51,12 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
   }
 
   /**
-   * Opens a SQLite-backed graph at a file path.
-   *
-   * @param string $path
-   *   The database file path, or ":memory:".
-   *
-   * @return self
-   *   The store.
-   *
-   * @throws \RuntimeException
-   *   When ext-pdo_sqlite is unavailable.
-   */
-  public static function open(string $path): self {
-    if (!in_array('sqlite', \PDO::getAvailableDrivers(), TRUE)) {
-      throw new \RuntimeException('The SQLite code graph needs ext-pdo_sqlite, which is not loaded.');
-    }
-    return new self(new \PDO('sqlite:' . $path));
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function ensureSchema(): void {
-    if ($this->ready) {
-      return;
-    }
+    // Never short-circuited on a flag: another process sharing the file (an
+    // index run, an uninstall) may have dropped the table since, and
+    // CREATE … IF NOT EXISTS costs a schema lookup.
     $this->pdo->exec(
       'CREATE TABLE IF NOT EXISTS ' . self::SYMBOLS . ' ('
       . 'id INTEGER PRIMARY KEY AUTOINCREMENT, '
@@ -107,7 +83,6 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
     $this->pdo->exec('CREATE INDEX IF NOT EXISTS droost_edge_src ON ' . self::EDGES . ' (src)');
     $this->pdo->exec('CREATE INDEX IF NOT EXISTS droost_edge_dst ON ' . self::EDGES . ' (dst)');
     $this->pdo->exec('CREATE INDEX IF NOT EXISTS droost_edge_file ON ' . self::EDGES . ' (file)');
-    $this->ready = TRUE;
   }
 
   /**
@@ -342,6 +317,10 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       // A symbol whose owning module is unrecorded cannot be attributed to a
       // boundary, and an empty bucket would read as a real one.
       . " WHERE n.module = ? AND f.module <> ? AND f.module <> ''"
+      // Ordered before the cut, as edgesBy() is: once a module passes the
+      // cap, which edges are counted must not depend on the scan order, or
+      // the same index gives two factsheets.
+      . ' ORDER BY near_end, far_end, other'
       // One past the cap, so hitting it is distinguishable from filling it.
       . ' LIMIT ' . ($cap + 1)
     );
@@ -518,11 +497,7 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
     );
     $statement->execute([$table]);
-    $exists = $statement->fetchColumn() !== FALSE;
-    if (!$exists) {
-      $this->ready = FALSE;
-    }
-    return $exists;
+    return $statement->fetchColumn() !== FALSE;
   }
 
   /**

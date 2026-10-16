@@ -112,11 +112,12 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
     $this->removeJsonServer($root, '.mcp.json', 'mcpServers', $result);
     $this->removeMarkdown($root, 'CLAUDE.md', $result);
     // Remove only Droost-authored skill dirs (sentinel present), which also
-    // cleans up orphans left by a renamed/removed skill or topic.
+    // cleans up orphans left by a renamed/removed skill or topic, and only
+    // as droost wrote them: a file the user added, or an edited SKILL.md,
+    // keeps its directory, with a warning.
     foreach (glob($root . '/.claude/skills/*', GLOB_ONLYDIR) ?: [] as $absolute) {
       if (is_file($absolute . '/' . self::SENTINEL)) {
-        $this->deleteDir($root, '.claude/skills/' . basename($absolute));
-        $result->addRemoved('.claude/skills/' . basename($absolute) . ' (skill)');
+        $this->removeSkill($root, basename($absolute), 'skill', $result);
       }
     }
     // Commands: remove exactly the names this provider ships, nothing else —
@@ -199,28 +200,61 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       return;
     }
     foreach ($retired as $name) {
-      $dir = '.claude/skills/' . $name;
-      $absolute = $root . '/' . $dir;
-      if (is_link($absolute)) {
-        $result->addWarning(sprintf('%s is a retired droost skill behind a symlink; left in place.', $dir));
-        continue;
-      }
-      $entries = array_values(array_diff(scandir($absolute) ?: [], ['.', '..']));
-      sort($entries);
-      if ($entries !== self::SKILL_FILES) {
-        $result->addWarning(sprintf('%s is a retired droost skill that holds other files; left in place.', $dir));
-        continue;
-      }
-      $recorded = SkillMdWriter::recordedHash((string) file_get_contents($absolute . '/' . self::SENTINEL));
-      if ($recorded !== NULL && !hash_equals($recorded, (string) hash_file('sha256', $absolute . '/SKILL.md'))) {
-        $result->addWarning(sprintf('%s is a retired droost skill that was edited after droost wrote it; left in place.', $dir));
-        continue;
-      }
-      unlink($absolute . '/SKILL.md');
-      unlink($absolute . '/' . self::SENTINEL);
-      rmdir($absolute);
-      $result->addRemoved($dir . ' (retired skill)');
+      $this->removeSkill($root, $name, 'retired skill', $result);
     }
+  }
+
+  /**
+   * Removes one droost-authored skill directory, if it is still as written.
+   *
+   * Never a symlink's target; never a directory holding anything but
+   * SKILL.md and the sentinel; never a SKILL.md edited since droost wrote it.
+   * Each refusal is a warning, and the directory stays whole.
+   *
+   * @param string $root
+   *   The project root.
+   * @param string $name
+   *   The skill directory's name under `.claude/skills/`.
+   * @param string $what
+   *   How the result names it: "skill" or "retired skill".
+   * @param \Droost\Engine\Harness\InstallResult $result
+   *   The result accumulator.
+   */
+  private function removeSkill(string $root, string $name, string $what, InstallResult $result): void {
+    $dir = '.claude/skills/' . $name;
+    $absolute = $root . '/' . $dir;
+    if (is_link($absolute)) {
+      $result->addWarning(sprintf('%s is a %s behind a symlink; left in place.', $dir, self::droostAuthored($what)));
+      return;
+    }
+    $entries = array_values(array_diff(scandir($absolute) ?: [], ['.', '..']));
+    sort($entries);
+    if ($entries !== self::SKILL_FILES) {
+      $result->addWarning(sprintf('%s is a %s that holds other files; left in place.', $dir, self::droostAuthored($what)));
+      return;
+    }
+    $recorded = SkillMdWriter::recordedHash((string) file_get_contents($absolute . '/' . self::SENTINEL));
+    if ($recorded !== NULL && !hash_equals($recorded, (string) hash_file('sha256', $absolute . '/SKILL.md'))) {
+      $result->addWarning(sprintf('%s is a %s that was edited after droost wrote it; left in place.', $dir, self::droostAuthored($what)));
+      return;
+    }
+    unlink($absolute . '/SKILL.md');
+    unlink($absolute . '/' . self::SENTINEL);
+    rmdir($absolute);
+    $result->addRemoved($dir . ' (' . $what . ')');
+  }
+
+  /**
+   * How a warning names the skill: "retired droost skill" or "droost skill".
+   *
+   * @param string $what
+   *   Either "skill" or "retired skill".
+   *
+   * @return string
+   *   The phrase.
+   */
+  private static function droostAuthored(string $what): string {
+    return $what === 'retired skill' ? 'retired droost skill' : 'droost skill';
   }
 
   /**

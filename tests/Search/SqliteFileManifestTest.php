@@ -32,7 +32,7 @@ final class SqliteFileManifestTest extends TestCase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->manifest = SqliteFileManifest::open(':memory:');
+    $this->manifest = new SqliteFileManifest(new \PDO('sqlite::memory:'));
   }
 
   /**
@@ -112,6 +112,20 @@ final class SqliteFileManifestTest extends TestCase {
     // the delete side, which is where SQLite's parameter limit actually bites.
     $this->manifest->apply([], array_column($rows, 'file'), 200);
     $this->assertSame([], $this->manifest->all());
+  }
+
+  /**
+   * A table another process dropped is made again by the next write.
+   */
+  public function testWriteAfterTheTableWasDroppedElsewhere(): void {
+    $pdo = new \PDO('sqlite::memory:');
+    $manifest = new SqliteFileManifest($pdo);
+    $manifest->replaceAll([$this->row('a.php', 'h1')], 100);
+    $pdo->exec('DROP TABLE droost_search_file');
+
+    $manifest->apply([$this->row('b.php', 'h2')], [], 200);
+
+    $this->assertSame(['b.php'], array_keys($manifest->all()));
   }
 
   /**

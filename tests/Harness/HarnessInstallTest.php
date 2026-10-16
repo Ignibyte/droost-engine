@@ -127,6 +127,93 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * An empty object elsewhere in a config stays an object, both ways.
+   *
+   * Decoding to arrays turned another server's `"env": {}` into `"env": []`
+   * on every install and uninstall, which its client may refuse.
+   */
+  public function testEmptyObjectsSurviveInstallAndUninstall(): void {
+    $raw = '{"mcpServers":{"other":{"command":"x","args":[],"env":{}}},"x":{},"y":{"0":"a"}}';
+    file_put_contents($this->root . '/.mcp.json', $raw);
+    file_put_contents($this->root . '/opencode.json', '{"mcp":{"other":{"type":"local","command":["x"],"environment":{}}},"x":{}}');
+
+    $this->install('all', self::SERVER);
+    $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'x'), 'a top-level {} is still an object');
+    $this->assertInstanceOf(\stdClass::class, $this->node('opencode.json', 'x'));
+    $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'mcpServers', 'other', 'env'), 'a sibling server\'s env is still an object');
+    $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'y'), 'an object keyed like a list is still an object');
+    $this->assertInstanceOf(\stdClass::class, $this->node('opencode.json', 'mcp', 'other', 'environment'));
+
+    $this->registry()->uninstall($this->root, 'all');
+    $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'mcpServers', 'other', 'env'), 'and after uninstall');
+    $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'x'));
+  }
+
+  /**
+   * What the user added to droost's own entry survives a re-install.
+   */
+  public function testUserKeysInDroostsEntrySurvive(): void {
+    $env = ['DROOST_MCP_TIMEOUT' => '120'];
+    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
+      'mcpServers' => ['droost' => ['command' => 'old', 'env' => $env]],
+    ]));
+    file_put_contents($this->root . '/opencode.json', (string) json_encode([
+      'mcp' => ['droost' => ['type' => 'local', 'command' => ['old'], 'environment' => $env]],
+    ]));
+
+    $this->install('all', self::SERVER);
+
+    $entry = $this->entry('.mcp.json', 'mcpServers', 'droost');
+    $this->assertIsArray($entry);
+    $this->assertSame('ddev', $entry['command']);
+    $this->assertSame(self::SERVER['args'], $entry['args']);
+    $this->assertSame(['DROOST_MCP_TIMEOUT' => '120'], $entry['env']);
+    $opencode = $this->entry('opencode.json', 'mcp', 'droost');
+    $this->assertIsArray($opencode);
+    $this->assertSame(['DROOST_MCP_TIMEOUT' => '120'], $opencode['environment']);
+    $this->assertSame(['ddev', 'exec', 'php', 'vendor/bin/droost-mcp'], $opencode['command']);
+  }
+
+  /**
+   * A config already holding droost's entry is not rewritten.
+   */
+  public function testAnInstalledConfigKeepsItsFormatting(): void {
+    $raw = "{\n  \"mcpServers\": {\n    \"droost\": {\"command\": \"ddev\", \"args\": [\"exec\", \"php\", \"vendor/bin/droost-mcp\"]}\n  }\n}\n";
+    file_put_contents($this->root . '/.mcp.json', $raw);
+
+    $this->install('claude', self::SERVER);
+
+    $this->assertSame($raw, file_get_contents($this->root . '/.mcp.json'));
+  }
+
+  /**
+   * A droost server Codex already has, in any spelling, is not defined twice.
+   */
+  public function testCodexHandWrittenDroostInAnySpellingIsLeftAlone(): void {
+    $spellings = [
+      "[mcp_servers.droost]\ncommand = \"x\"\n",
+      "[mcp_servers.\"droost\"]\ncommand = \"x\"\n",
+      "[ mcp_servers . droost ]\ncommand = \"x\"\n",
+      "[mcp_servers.droost.env]\nA = \"1\"\n",
+      "[mcp_servers]\ndroost = { command = \"x\" }\n",
+      "[mcp_servers]\n\"droost\".command = \"x\"\n",
+      "mcp_servers.droost.command = \"x\"\n",
+    ];
+    @mkdir($this->root . '/.codex');
+    foreach ($spellings as $toml) {
+      file_put_contents($this->root . '/.codex/config.toml', $toml);
+      $result = $this->install('codex', self::SERVER);
+      $this->assertSame($toml, file_get_contents($this->root . '/.codex/config.toml'), $toml);
+      $this->assertNotSame([], array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'already defines mcp_servers.droost')), $toml);
+    }
+
+    $commented = "# [mcp_servers.droost] is ours now\n[mcp_servers.other]\ncommand = \"y\"\n";
+    file_put_contents($this->root . '/.codex/config.toml', $commented);
+    $this->install('codex', self::SERVER);
+    $this->assertStringContainsString("[mcp_servers.droost]\ncommand = \"ddev\"", (string) file_get_contents($this->root . '/.codex/config.toml'), 'a comment or another server is not a definition');
+  }
+
+  /**
    * A config that is not valid JSON is left alone, and the install says so.
    */
   public function testMalformedConfigIsRefused(): void {
@@ -292,6 +379,59 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * Uninstall removes droost's skills as written, and nothing anyone added.
+   */
+  public function testUninstallKeepsWhatDroostDidNotWrite(): void {
+    $this->install('claude');
+    $this->plantSkill('drupal-notes', "Legacy.\n");
+    file_put_contents($this->root . '/.claude/skills/drupal-notes/notes.md', "Mine.\n");
+    $written = "What droost wrote.\n";
+    $this->plantSkill('drupal-edited', $written, SkillMdWriter::sentinel($written));
+    file_put_contents($this->root . '/.claude/skills/drupal-edited/SKILL.md', "Edited.\n");
+
+    $result = $this->registry()->uninstall($this->root, 'all');
+
+    $this->assertDirectoryDoesNotExist($this->root . '/.claude/skills/documenting-changes', 'an untouched droost skill is removed');
+    $this->assertFileExists($this->root . '/.claude/skills/drupal-notes/notes.md', 'a user\'s file is never deleted');
+    $this->assertFileExists($this->root . '/.claude/skills/drupal-edited/SKILL.md', 'an edited skill is kept');
+    $this->assertNotEmpty(array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'drupal-notes') && str_contains($w, 'other files')));
+    $this->assertNotEmpty(array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'drupal-edited') && str_contains($w, 'edited')));
+  }
+
+  /**
+   * Uninstall never follows a symlinked skill, nor removes it.
+   */
+  public function testUninstallNeverFollowsSymlinkedSkill(): void {
+    $target = dirname($this->root) . '/precious';
+    mkdir($target, 0777, TRUE);
+    file_put_contents($target . '/SKILL.md', "Linked.\n");
+    file_put_contents($target . '/' . SkillMdWriter::SENTINEL, SkillMdWriter::sentinel("Linked.\n"));
+    mkdir($this->root . '/.claude/skills', 0777, TRUE);
+    symlink($target, $this->root . '/.claude/skills/drupal-linked');
+
+    $result = $this->registry()->uninstall($this->root, 'all');
+
+    $this->assertTrue(is_link($this->root . '/.claude/skills/drupal-linked'), 'the link is left in place');
+    $this->assertFileExists($target . '/SKILL.md', 'and so is what it points at');
+    $this->assertNotEmpty(array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'symlink')));
+  }
+
+  /**
+   * A skill's name never takes its directory outside `.claude/skills`.
+   */
+  public function testSkillNameCannotEscapeTheSkillsDirectory(): void {
+    file_put_contents($this->skillsDir . '/escape.md', "---\nname: ../../escaped\ndescription: x\n---\nBody.\n");
+    file_put_contents($this->skillsDir . '/Bad Name.md', "No frontmatter.\n");
+
+    $this->install('claude');
+
+    $this->assertFileDoesNotExist(dirname($this->root) . '/escaped/SKILL.md');
+    $this->assertFileDoesNotExist($this->root . '/escaped/SKILL.md');
+    $this->assertFileExists($this->root . '/.claude/skills/escape/SKILL.md', 'the file\'s own name is used instead');
+    $this->assertDirectoryDoesNotExist($this->root . '/.claude/skills/Bad Name', 'a skill with no usable name is not rendered');
+  }
+
+  /**
    * The read-only report names what a sweep would consider, and removes none.
    */
   public function testRetiredSkillsReportsWithoutRemoving(): void {
@@ -355,7 +495,7 @@ final class HarnessInstallTest extends TestCase {
    * What droost is, stamped with the version, and naming no removed tool.
    */
   public function testDroostBlockNamesNoRemovedTool(): void {
-    $body = (new DroostBlock(new FakeSite([], '11.4.2')))->body();
+    $body = (new DroostBlock(new FakeSite('11.4.2')))->body();
 
     $this->assertStringStartsWith('# Droost — Drupal 11.4.2, PHP ', $body);
     $this->assertStringContainsString('## Use Droost first', $body);
@@ -366,7 +506,7 @@ final class HarnessInstallTest extends TestCase {
     $this->assertStringContainsString('vendor/bin/droost', $body, 'and how to ask about the code with no site');
     $this->assertStringContainsString('drush droost:brief', $body);
     $this->assertStringContainsString('MCP', $body, 'it says the tools are reachable through MCP too');
-    $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite([], '')))->body());
+    $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite('')))->body());
   }
 
   /**
@@ -404,6 +544,26 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * A value in a JSON config, decoded with objects as objects.
+   *
+   * @param string $file
+   *   The config, relative to the project root.
+   * @param string ...$path
+   *   The keys to walk.
+   *
+   * @return mixed
+   *   The value.
+   */
+  private function node(string $file, string ...$path): mixed {
+    $value = json_decode((string) file_get_contents($this->root . '/' . $file), FALSE);
+    foreach ($path as $key) {
+      $this->assertInstanceOf(\stdClass::class, $value, $file . ': ' . $key . '\'s parent is an object');
+      $value = $value->{$key} ?? NULL;
+    }
+    return $value;
+  }
+
+  /**
    * The registry every install and uninstall uses.
    *
    * @return \Droost\Engine\Harness\HarnessRegistry
@@ -411,7 +571,7 @@ final class HarnessInstallTest extends TestCase {
    */
   private function registry(): HarnessRegistry {
     return new HarnessRegistry(
-      new DroostBlock(new FakeSite([], '11.4.2')),
+      new DroostBlock(new FakeSite('11.4.2')),
       new AgentsHarnessInstaller(),
       new ClaudeHarnessInstaller(new SkillProvider($this->skillsDir), $this->writer()),
       new CodexHarnessInstaller(),
@@ -428,7 +588,7 @@ final class HarnessInstallTest extends TestCase {
    *   A writer stamping a fixed version.
    */
   private function writer(): SkillMdWriter {
-    return new SkillMdWriter('0.7.0', new FakeSite([], '11.4.2'));
+    return new SkillMdWriter('0.7.0', new FakeSite('11.4.2'));
   }
 
   /**

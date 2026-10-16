@@ -27,11 +27,6 @@ final class SqliteVectorStore implements VectorStoreInterface {
   private const string TABLE = 'droost_search_vectors';
 
   /**
-   * Whether the schema has been ensured on this connection.
-   */
-  private bool $ready = FALSE;
-
-  /**
    * Constructs a SqliteVectorStore.
    *
    * @param \PDO $pdo
@@ -41,25 +36,6 @@ final class SqliteVectorStore implements VectorStoreInterface {
     private readonly \PDO $pdo,
   ) {
     $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-  }
-
-  /**
-   * Opens a SQLite-backed vector store at a file path.
-   *
-   * @param string $path
-   *   The database file path, or ":memory:".
-   *
-   * @return self
-   *   The store.
-   *
-   * @throws \RuntimeException
-   *   When ext-pdo_sqlite is unavailable.
-   */
-  public static function open(string $path): self {
-    if (!in_array('sqlite', \PDO::getAvailableDrivers(), TRUE)) {
-      throw new \RuntimeException('The SQLite vector store needs ext-pdo_sqlite, which is not loaded.');
-    }
-    return new self(new \PDO('sqlite:' . $path));
   }
 
   /**
@@ -73,9 +49,9 @@ final class SqliteVectorStore implements VectorStoreInterface {
    * {@inheritdoc}
    */
   public function ensureSchema(int $dimension): void {
-    if ($this->ready) {
-      return;
-    }
+    // Never short-circuited on a flag: another process sharing the file (an
+    // index run, an uninstall) may have dropped the table since, and
+    // CREATE … IF NOT EXISTS costs a schema lookup.
     // The dimension is not a column constraint here, exactly as in the
     // portable store: vectors are JSON, and dimension() reads it back from a
     // stored row. search() then refuses a query of the wrong width rather
@@ -90,7 +66,6 @@ final class SqliteVectorStore implements VectorStoreInterface {
       . 'PRIMARY KEY (corpus, ref))'
     );
     $this->pdo->exec('CREATE INDEX IF NOT EXISTS droost_vectors_file ON ' . self::TABLE . ' (file)');
-    $this->ready = TRUE;
   }
 
   /**
@@ -274,11 +249,16 @@ final class SqliteVectorStore implements VectorStoreInterface {
       . 'ON CONFLICT(corpus, ref) DO UPDATE SET meta = excluded.meta, '
       . 'vector = excluded.vector, file = excluded.file'
     );
+    // A value that will not encode throws, so the batch it belongs to rolls
+    // back: storing '' for it would keep a row whose meta reads as empty and
+    // whose scope filter then drops it unseen. Invalid UTF-8 in meta (a
+    // Latin-1 heading) is substituted rather than refused; a NAN in a vector
+    // is refused.
     $statement->execute([
       $corpus,
       $ref,
-      (string) json_encode($meta),
-      (string) json_encode(array_values($vector)),
+      json_encode($meta, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE),
+      json_encode(array_values($vector), JSON_THROW_ON_ERROR),
       $file,
     ]);
   }
@@ -336,11 +316,7 @@ final class SqliteVectorStore implements VectorStoreInterface {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
     );
     $statement->execute([self::TABLE]);
-    $exists = $statement->fetchColumn() !== FALSE;
-    if (!$exists) {
-      $this->ready = FALSE;
-    }
-    return $exists;
+    return $statement->fetchColumn() !== FALSE;
   }
 
 }

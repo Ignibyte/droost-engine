@@ -27,13 +27,6 @@ final class InstallResult {
   public array $removed = [];
 
   /**
-   * Human-readable notes about skipped actions.
-   *
-   * @var array<int, string>
-   */
-  public array $skipped = [];
-
-  /**
    * Warnings (e.g. a conflicting hand-added entry).
    *
    * @var array<int, string>
@@ -58,16 +51,6 @@ final class InstallResult {
    */
   public function addRemoved(string $path): void {
     $this->removed[] = $path;
-  }
-
-  /**
-   * Records a skipped action.
-   *
-   * @param string $note
-   *   The note.
-   */
-  public function addSkipped(string $note): void {
-    $this->skipped[] = $note;
   }
 
   /**

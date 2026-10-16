@@ -105,6 +105,7 @@ final class HarnessUtilitiesTest extends TestCase {
    */
   public function testTomlEmitter(): void {
     $this->assertSame('"a\\"b"', Toml::string('a"b'), 'Quotes are escaped.');
+    $this->assertSame('"a\\u0001b\\u007Fc\\td"', Toml::string("a\x01b\x7fc\td"), 'Every control character is escaped; TOML forbids them raw.');
     $args = ['exec', 'php', 'vendor/bin/droost-mcp'];
     $this->assertSame('["exec", "php", "vendor/bin/droost-mcp"]', Toml::stringArray($args));
     $table = Toml::mcpServerTable('droost', 'ddev', ['exec', 'php', 'vendor/bin/droost-mcp']);

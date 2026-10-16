@@ -121,7 +121,6 @@ final class ScopeClassifierTest extends TestCase {
       'drupal/droost' => ['drupal-module', '/app/vendor/composer/../..'],
       'drupal/weird' => ['drupal-module', '/app/web'],
     ]);
-    $this->assertTrue($site->knowsComposer());
     $this->assertSame(Provenance::Custom, $site->classify('modules/custom/droost'));
     $this->assertSame(Provenance::Custom, $site->classify('modules/tool'));
   }
@@ -169,7 +168,6 @@ final class ScopeClassifierTest extends TestCase {
       ['versions' => 'nope'],
       ['versions' => $versions],
     ]);
-    $this->assertTrue($site->knowsComposer());
     $this->assertSame(Provenance::Custom, $site->classify('modules/x'));
   }
 
@@ -184,7 +182,6 @@ final class ScopeClassifierTest extends TestCase {
   #[DataProvider('pathOnlyCases')]
   public function testWithoutComposer(string $path, Provenance $expected): void {
     $site = ScopeClassifier::withoutComposer();
-    $this->assertFalse($site->knowsComposer());
     $this->assertSame($expected, $site->classify($path));
   }
 
@@ -211,7 +208,6 @@ final class ScopeClassifierTest extends TestCase {
    */
   public function testForAppRootReadsComposer(): void {
     $site = ScopeClassifier::forAppRoot('/nowhere/web');
-    $this->assertTrue($site->knowsComposer());
     $this->assertSame(Provenance::Custom, $site->classify('modules/tool'));
     $this->assertSame(Provenance::Core, $site->classify('core/modules/node'));
   }

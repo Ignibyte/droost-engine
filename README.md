@@ -42,20 +42,14 @@ views-handler. The registry accepts both halves, so a consumer sees one set.
 That the two halves are wired together at the container rather than merged is
 the point: the contract is framework-free even where an implementation is not.
 
-## The `Site` port, and why it is three-valued
+## The `Site` port
 
 `Site\ExtensionLocatorInterface` is how everything else asks what the project
-has. Its `isInstalled()` returns `true`, `false`, **or `null`** — because the
+has: the installed extensions, where one lives, and the core version. The
 engine runs both inside a booted site, where absence is a fact, and against a
-bare checkout, where it is not knowable.
-
-That distinction is load-bearing rather than fussy: letting `null` collapse
-into `false` makes a plain checkout report as missing what is merely
-unknowable, and a missing answer looks exactly like a negative one.
-`Site\UnknownSite` answers `null` to everything, and callers are contracted to
-read that as "cannot tell", never as "not installed". Since 0.7.0 the engine
-itself reads only `coreVersion()` from the port; the guideline catalogue that
-pruned on `isInstalled()` is gone.
+bare checkout, where it is not knowable, so an empty answer from a locator
+that cannot ask the site (`Site\UnknownSite`) means "cannot tell", never "not
+installed". The engine itself reads only `coreVersion()` from the port.
 
 ## Status
 

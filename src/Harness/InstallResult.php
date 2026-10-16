@@ -80,17 +80,4 @@ final class InstallResult {
     $this->warnings[] = $warning;
   }
 
-  /**
-   * Merges another result into this one.
-   *
-   * @param \Droost\Engine\Harness\InstallResult $other
-   *   The result to merge.
-   */
-  public function merge(InstallResult $other): void {
-    $this->written = [...$this->written, ...$other->written];
-    $this->removed = [...$this->removed, ...$other->removed];
-    $this->skipped = [...$this->skipped, ...$other->skipped];
-    $this->warnings = [...$this->warnings, ...$other->warnings];
-  }
-
 }

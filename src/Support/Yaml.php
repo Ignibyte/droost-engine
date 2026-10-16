@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Droost\Engine\Support;
 
 use Symfony\Component\Yaml\Dumper;
-use Symfony\Component\Yaml\Exception\ExceptionInterface;
 use Symfony\Component\Yaml\Parser;
 use Symfony\Component\Yaml\Yaml as SymfonyYaml;
 
@@ -70,28 +69,6 @@ final class Yaml {
       $raw,
       SymfonyYaml::PARSE_EXCEPTION_ON_INVALID_TYPE | SymfonyYaml::PARSE_CUSTOM_TAGS,
     );
-  }
-
-  /**
-   * Decodes YAML, returning NULL rather than throwing on malformed input.
-   *
-   * For the readers that must survive a hand-edited file: a wiki page whose
-   * frontmatter someone broke should drop out of the index, not take the
-   * whole run down with it.
-   *
-   * @param string $raw
-   *   The YAML.
-   *
-   * @return mixed
-   *   The decoded data, or NULL when it could not be parsed.
-   */
-  public static function decodeOrNull(string $raw): mixed {
-    try {
-      return self::decode($raw);
-    }
-    catch (ExceptionInterface) {
-      return NULL;
-    }
   }
 
 }

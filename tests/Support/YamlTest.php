@@ -144,12 +144,4 @@ final class YamlTest extends TestCase {
     Yaml::decode("a:\n  - b\n c: broken\n");
   }
 
-  /**
-   * Malformed input yields NULL from decodeOrNull(), and nothing else does.
-   */
-  public function testDecodeOrNullReturnsNullOnMalformedInput(): void {
-    $this->assertNull(Yaml::decodeOrNull("a:\n  - b\n c: broken\n"));
-    $this->assertSame(['a' => 1], Yaml::decodeOrNull("a: 1\n"));
-  }
-
 }

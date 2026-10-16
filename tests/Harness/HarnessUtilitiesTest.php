@@ -80,16 +80,10 @@ final class HarnessUtilitiesTest extends TestCase {
   }
 
   /**
-   * JsonMerge preserves siblings on set and drops emptied parents on unset.
+   * JsonMerge drops one key, keeps its siblings, and drops an emptied parent.
    */
   public function testJsonMerge(): void {
-    $data = ['mcpServers' => ['other' => ['command' => 'x']]];
-    $data = JsonMerge::setPath($data, 'mcpServers', 'droost', ['command' => 'ddev']);
-    $servers = $data['mcpServers'];
-    $this->assertIsArray($servers);
-    $this->assertArrayHasKey('other', $servers);
-    $this->assertArrayHasKey('droost', $servers);
-
+    $data = ['mcpServers' => ['other' => ['command' => 'x'], 'droost' => ['command' => 'ddev']]];
     $data = JsonMerge::unsetPath($data, 'mcpServers', 'droost');
     $kept = $data['mcpServers'];
     $this->assertIsArray($kept);

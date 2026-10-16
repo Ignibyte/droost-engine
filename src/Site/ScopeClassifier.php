@@ -112,16 +112,6 @@ final readonly class ScopeClassifier {
   }
 
   /**
-   * Whether composer's record was read.
-   *
-   * @return bool
-   *   FALSE when every answer rests on the path alone.
-   */
-  public function knowsComposer(): bool {
-    return $this->owners !== NULL;
-  }
-
-  /**
    * Classifies an extension by its path.
    *
    * @param string $path

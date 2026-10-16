@@ -9,12 +9,9 @@ use Droost\Engine\Site\ExtensionLocatorInterface;
 /**
  * A site that always knows the answer.
  *
- * The counterpart to UnknownSite, which never does. Between them the two
- * cover the three answers isInstalled() can give, and keeping them as
- * separate doubles is what stops a test from accidentally asserting the
- * "absent" behaviour while actually exercising the "unknown" path.
- *
- * Narrows the return type to bool accordingly — this double is never unsure.
+ * The counterpart to UnknownSite, which never does. Keeping them as separate
+ * doubles is what stops a test from accidentally asserting the "absent"
+ * behaviour while actually exercising the "unknown" path.
  */
 final readonly class FakeSite implements ExtensionLocatorInterface {
 
@@ -31,13 +28,6 @@ final readonly class FakeSite implements ExtensionLocatorInterface {
     private array $extensions = [],
     private string $coreVersion = '11.4.2',
   ) {}
-
-  /**
-   * {@inheritdoc}
-   */
-  public function isInstalled(string $name): bool {
-    return array_key_exists($name, $this->extensions);
-  }
 
   /**
    * {@inheritdoc}

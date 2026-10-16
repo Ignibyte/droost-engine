@@ -33,13 +33,6 @@ final readonly class UnknownSite implements ExtensionLocatorInterface {
   /**
    * {@inheritdoc}
    */
-  public function isInstalled(string $name): ?bool {
-    return NULL;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function installed(): array {
     return [];
   }

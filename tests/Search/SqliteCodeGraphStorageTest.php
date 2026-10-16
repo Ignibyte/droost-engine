@@ -115,6 +115,27 @@ final class SqliteCodeGraphStorageTest extends TestCase {
   }
 
   /**
+   * Core's rows come after the site's own, before the limit cuts (F-297).
+   */
+  public function testCoreComesAfterTheSitesOwn(): void {
+    $this->graph->rebuild([
+      $this->symbol('Drupal\\Core\\Field\\FormatterBase', 'core', 'core/lib/Drupal/Core/Field/FormatterBase.php'),
+      $this->symbol('Drupal\\image\\ImageFormatter', 'image', 'core/modules/image/src/ImageFormatter.php'),
+      $this->symbol('Drupal\\portal\\PortalFormatter', 'portal', 'modules/custom/portal/src/PortalFormatter.php'),
+    ], [
+      $this->edge('Drupal\\Core\\Field\\FormatterBase', 'Drupal\\Core\\Field\\FormatterInterface', 'core/lib/Drupal/Core/Field/FormatterBase.php'),
+      $this->edge('Drupal\\portal\\PortalFormatter', 'Drupal\\Core\\Field\\FormatterInterface', 'modules/custom/portal/src/PortalFormatter.php'),
+    ]);
+
+    $this->assertSame(['Drupal\\portal\\PortalFormatter'], array_column($this->graph->findSymbols('Formatter', 1), 'fqcn'));
+    $this->assertSame(
+      ['Drupal\\portal\\PortalFormatter', 'Drupal\\Core\\Field\\FormatterBase', 'Drupal\\image\\ImageFormatter'],
+      array_column($this->graph->findSymbols('Formatter'), 'fqcn'),
+    );
+    $this->assertSame(['Drupal\\portal\\PortalFormatter'], array_column($this->graph->callers('Drupal\\Core\\Field\\FormatterInterface', 1), 'src'));
+  }
+
+  /**
    * A truncated search is stable: the same call returns the same subset.
    *
    * This is the contract the port actually promises. It is deliberately NOT

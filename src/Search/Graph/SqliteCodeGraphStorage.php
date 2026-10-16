@@ -39,6 +39,16 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
   private const string LIKE_ESCAPE = " ESCAPE '\\'";
 
   /**
+   * Orders Drupal core's rows after the site's own, ahead of any limit.
+   *
+   * A site's index may carry core's symbols (F-297). Ordered by name alone,
+   * `Drupal\Core\…` sorts ahead of most of a site's namespaces, and a search
+   * for `Formatter` would fill its twenty rows with core before reaching the
+   * site's own class.
+   */
+  private const string CORE_LAST = "CASE WHEN file LIKE 'core/%' THEN 1 ELSE 0 END, ";
+
+  /**
    * Constructs a SqliteCodeGraphStorage.
    *
    * @param \PDO $pdo
@@ -169,7 +179,7 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       // for the same query — which breaks the "same subset every call"
       // promise the moment a caller switches stores. Found by diffing both
       // against the harness's real 33k-symbol graph, not by reading.
-      . ' ORDER BY fqcn COLLATE NOCASE, line LIMIT ' . max(1, $limit)
+      . ' ORDER BY ' . self::CORE_LAST . 'fqcn COLLATE NOCASE, line LIMIT ' . max(1, $limit)
     );
     $statement->execute(['%' . self::escapeLike(mb_strtolower($pattern)) . '%']);
     $rows = [];
@@ -218,7 +228,7 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       'SELECT fqcn FROM ' . self::SYMBOLS
       . " WHERE kind IN ('class', 'interface', 'trait', 'enum')"
       . ' AND LOWER(fqcn) LIKE ?' . self::LIKE_ESCAPE
-      . ' ORDER BY fqcn COLLATE NOCASE LIMIT 5000'
+      . ' ORDER BY ' . self::CORE_LAST . 'fqcn COLLATE NOCASE LIMIT 5000'
     );
     $statement->execute(['%' . self::escapeLike($lower)]);
     $out = [];
@@ -396,7 +406,7 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
       // Ordered before the cut, because the limit keeps only the first rows:
       // without an order the database chooses which, and two identical
       // indexes could answer droost_graph differently.
-      . ' ORDER BY ' . ($column === 'src' ? 'dst' : 'src') . ' COLLATE NOCASE, kind'
+      . ' ORDER BY ' . self::CORE_LAST . ($column === 'src' ? 'dst' : 'src') . ' COLLATE NOCASE, kind'
       . ' LIMIT ' . max(1, $limit)
     );
     $statement->execute([$value]);

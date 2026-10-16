@@ -35,6 +35,11 @@ use PHPUnit\Framework\TestCase;
 final class HarnessInstallTest extends TestCase {
 
   /**
+   * The MCP server droost's installer passes on DDEV.
+   */
+  private const array SERVER = ['command' => 'ddev', 'args' => ['exec', 'php', 'vendor/bin/droost-mcp']];
+
+  /**
    * The pipeline's own AGENTS.md block, which the harness must never touch.
    */
   private const string WORKFLOW_BLOCK = "<!-- BEGIN DROOST WORKFLOW -->\nBuilds start with /droost:workflow:start.\n<!-- END DROOST WORKFLOW -->";
@@ -79,6 +84,74 @@ final class HarnessInstallTest extends TestCase {
     $this->install('all');
 
     $this->assertSame($first, $this->snapshot());
+
+    $this->install('all', self::SERVER);
+    $withServer = $this->snapshot();
+    $this->install('all', self::SERVER);
+    $this->assertSame($withServer, $this->snapshot(), 'a second install with the server changes nothing either');
+  }
+
+  /**
+   * With a server, every harness writes droost's entry beside its others.
+   *
+   * The shapes are the ones each client reads: `mcpServers` for Claude Code,
+   * Gemini and Qwen; a fenced `[mcp_servers.droost]` table for Codex; a
+   * `local` entry with the command as one list for opencode.
+   */
+  public function testInstallWritesTheDroostServerEverywhere(): void {
+    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
+      'mcpServers' => ['playwright' => ['command' => 'npx']],
+    ]));
+    @mkdir($this->root . '/.codex');
+    file_put_contents($this->root . '/.codex/config.toml', "model = \"x\"\n");
+    file_put_contents($this->root . '/opencode.json', (string) json_encode(['theme' => 'dark']));
+
+    $result = $this->install('all', self::SERVER);
+
+    $this->assertSame(['command' => 'npx'], $this->entry('.mcp.json', 'mcpServers', 'playwright'), 'the user\'s server is kept');
+    $this->assertSame(self::SERVER, $this->entry('.mcp.json', 'mcpServers', 'droost'));
+    foreach (['.gemini/settings.json', '.qwen/settings.json'] as $file) {
+      $this->assertSame(self::SERVER, $this->entry($file, 'mcpServers', 'droost'), $file);
+    }
+    $codex = (string) file_get_contents($this->root . '/.codex/config.toml');
+    $this->assertStringContainsString('model = "x"', $codex);
+    $this->assertStringContainsString("[mcp_servers.droost]\ncommand = \"ddev\"\nargs = [\"exec\", \"php\", \"vendor/bin/droost-mcp\"]", $codex);
+    $this->assertSame(
+      ['type' => 'local', 'command' => ['ddev', 'exec', 'php', 'vendor/bin/droost-mcp'], 'enabled' => TRUE],
+      $this->entry('opencode.json', 'mcp', 'droost'),
+    );
+    $opencode = json_decode((string) file_get_contents($this->root . '/opencode.json'), TRUE);
+    $this->assertIsArray($opencode);
+    $this->assertSame('dark', $opencode['theme']);
+    $this->assertContains('.mcp.json', $result->written);
+  }
+
+  /**
+   * A config that is not valid JSON is left alone, and the install says so.
+   */
+  public function testMalformedConfigIsRefused(): void {
+    file_put_contents($this->root . '/.mcp.json', '{"mcpServers": {');
+
+    $result = $this->install('claude', self::SERVER);
+
+    $this->assertSame('{"mcpServers": {', file_get_contents($this->root . '/.mcp.json'));
+    $this->assertNotSame([], array_filter($result->warnings, static fn (string $w): bool => str_contains($w, '.mcp.json is present but not valid JSON')));
+  }
+
+  /**
+   * Uninstall removes droost's entry and keeps the rest.
+   */
+  public function testUninstallRemovesTheServer(): void {
+    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
+      'mcpServers' => ['playwright' => ['command' => 'npx']],
+    ]));
+    $this->install('all', self::SERVER);
+
+    $this->registry()->uninstall($this->root, 'all');
+
+    $this->assertNull($this->entry('.mcp.json', 'mcpServers', 'droost'));
+    $this->assertSame(['command' => 'npx'], $this->entry('.mcp.json', 'mcpServers', 'playwright'));
+    $this->assertStringNotContainsString('mcp_servers.droost', (string) @file_get_contents($this->root . '/.codex/config.toml'));
   }
 
   /**
@@ -242,11 +315,10 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
-   * An install removes the droost MCP server an earlier install registered.
+   * An install with no server (`--no-mcp`) removes droost's MCP entry.
    *
-   * Droost is reached through drush; an editor configured to launch a droost
-   * server that no longer exists fails at every start. Every other server and
-   * key is kept, and a file left holding nothing is removed.
+   * Every other server and key is kept, and a file left holding nothing is
+   * removed.
    */
   public function testInstallRemovesTheDroostServerEverywhere(): void {
     $server = ['command' => 'ddev', 'args' => ['drush', 'mcp:server']];
@@ -287,12 +359,13 @@ final class HarnessInstallTest extends TestCase {
 
     $this->assertStringStartsWith('# Droost — Drupal 11.4.2, PHP ', $body);
     $this->assertStringContainsString('## Use Droost first', $body);
-    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__', 'MCP'] as $removed) {
+    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__'] as $removed) {
       $this->assertStringNotContainsString($removed, $body);
     }
     $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask the site');
     $this->assertStringContainsString('vendor/bin/droost', $body, 'and how to ask about the code with no site');
     $this->assertStringContainsString('drush droost:brief', $body);
+    $this->assertStringContainsString('MCP', $body, 'it says the tools are reachable through MCP too');
     $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite([], '')))->body());
   }
 
@@ -301,12 +374,43 @@ final class HarnessInstallTest extends TestCase {
    *
    * @param string $harness
    *   The harness selection.
+   * @param array{command: string, args: list<string>}|null $server
+   *   droost's MCP server, or NULL for none.
    *
    * @return \Droost\Engine\Harness\InstallResult
    *   The result.
    */
-  private function install(string $harness): InstallResult {
-    $registry = new HarnessRegistry(
+  private function install(string $harness, ?array $server = NULL): InstallResult {
+    return $this->registry()->install($this->root, $harness, $server);
+  }
+
+  /**
+   * One entry of a JSON config's server map, or NULL when it is not there.
+   *
+   * @param string $file
+   *   The config, relative to the project root.
+   * @param string $parent
+   *   The server map's key.
+   * @param string $key
+   *   The server's key.
+   *
+   * @return mixed
+   *   The entry.
+   */
+  private function entry(string $file, string $parent, string $key): mixed {
+    $data = json_decode((string) @file_get_contents($this->root . '/' . $file), TRUE);
+    $servers = is_array($data) ? ($data[$parent] ?? NULL) : NULL;
+    return is_array($servers) ? ($servers[$key] ?? NULL) : NULL;
+  }
+
+  /**
+   * The registry every install and uninstall uses.
+   *
+   * @return \Droost\Engine\Harness\HarnessRegistry
+   *   The registry, with every harness.
+   */
+  private function registry(): HarnessRegistry {
+    return new HarnessRegistry(
       new DroostBlock(new FakeSite([], '11.4.2')),
       new AgentsHarnessInstaller(),
       new ClaudeHarnessInstaller(new SkillProvider($this->skillsDir), $this->writer()),
@@ -315,7 +419,6 @@ final class HarnessInstallTest extends TestCase {
       new GeminiHarnessInstaller(),
       new OpencodeHarnessInstaller(),
     );
-    return $registry->install($this->root, $harness);
   }
 
   /**

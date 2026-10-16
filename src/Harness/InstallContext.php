@@ -19,15 +19,20 @@ final readonly class InstallContext {
    * block reaches Claude Code, Qwen, Gemini and opencode. A switch that could
    * silently cut that road is not an option worth keeping.
    *
-   * droost serves no MCP server, so there is no launch command to carry:
-   * an agent reaches droost through drush, as the block says.
+   * The MCP server is optional. With one, each harness writes droost's entry
+   * beside whatever else its config holds; without one (`droost:install
+   * --no-mcp`), an entry an earlier install wrote is removed, and droost is
+   * reached by command alone.
    *
    * @param string $blockBody
    *   The AGENTS.md block body (without markers). The pointer writers build
    *   their own import or sentence pointer to it.
+   * @param array{command: string, args: list<string>}|null $server
+   *   droost's MCP server launch command and arguments, or NULL for none.
    */
   public function __construct(
     public string $blockBody,
+    public ?array $server = NULL,
   ) {}
 
 }

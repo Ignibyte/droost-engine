@@ -75,6 +75,29 @@ final class JsonMerge {
   }
 
   /**
+   * Sets a value at a two-level key path, creating the parent map if needed.
+   *
+   * @param array<string, mixed> $data
+   *   The data to mutate.
+   * @param string $parent
+   *   The parent key (e.g. "mcpServers").
+   * @param string $key
+   *   The child key (e.g. "droost").
+   * @param mixed $value
+   *   The value to set.
+   *
+   * @return array<string, mixed>
+   *   The mutated data.
+   */
+  public static function setPath(array $data, string $parent, string $key, mixed $value): array {
+    if (!isset($data[$parent]) || !is_array($data[$parent])) {
+      $data[$parent] = [];
+    }
+    $data[$parent][$key] = $value;
+    return $data;
+  }
+
+  /**
    * Removes a value at a two-level key path; drops the parent map if emptied.
    *
    * @param array<string, mixed> $data

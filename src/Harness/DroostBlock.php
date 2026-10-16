@@ -10,7 +10,7 @@ use Droost\Engine\Site\ExtensionLocatorInterface;
  * What droost is, in the one wording every agent-facing surface uses.
  *
  * The AGENTS.md block every harness reads. droost is this codebase's
- * knowledge and the build's runtime: it is asked by command, through drush,
+ * knowledge and the build's runtime: it is asked through MCP or by command,
  * and it prescribes no way to build. What it says here is where to look,
  * how to ask, and that the site's own rules are held by gates and a reviewer.
  */
@@ -29,11 +29,13 @@ final readonly class DroostBlock {
   relying on prior knowledge or walking the file tree — Drupal APIs change
   across versions and model training lags.
 
-  Ask by command. Two of them: `vendor/bin/droost` for the code, which
-  boots no Drupal and answers while the site is broken, and `drush
-  droost:tool` for the live site. Either lists its tools with no argument,
-  shows one with `<id> help`, and runs one with `<id> '<json>'`. On DDEV run
-  both in the container: `ddev exec vendor/bin/droost …`, `ddev drush …`.
+  Ask through MCP (droost's server, when installed) or by command; the same
+  tools answer, and every call lands in the same record. By command,
+  `vendor/bin/droost` answers about the code, booting no Drupal, so it works
+  while the site is broken; `drush droost:tool` answers about the live site.
+  Either lists its tools with no argument, shows one with `<id> help`, and
+  runs one with `<id> '<json>'`. On DDEV run both in the container: `ddev
+  exec vendor/bin/droost …`, `ddev drush …`.
 
   - The site's facts and its house rules: `drush droost:brief`.
   - How this project is put together, and how it documents itself: `vendor/bin/droost droost_wiki`.

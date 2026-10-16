@@ -149,6 +149,17 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**Unreleased** — droost's MCP server comes back as a second door, a thin
+server that holds no Drupal and runs each call as a fresh command.
+`HarnessRegistry::install(string $root, string $harness, ?array $server = NULL)`:
+with a server (`['command' => …, 'args' => […]]`) every harness writes droost's
+entry beside its other servers (`.mcp.json`, `.gemini/` and `.qwen/` settings
+under `mcpServers`; a fenced `[mcp_servers.droost]` table in
+`.codex/config.toml`; a `local` entry in `opencode.json`); with NULL the entry
+is removed, as in 0.8.0. `InstallContext` carries the optional server, and
+`Toml` and `JsonMerge::setPath` are back. The directive says droost's tools
+answer through MCP or by command, with the same record.
+
 **0.8.0** — droost is reached through drush, not MCP. The harness
 installers write guidance only (AGENTS.md, and each editor's pointer to it)
 and remove the droost MCP server entry an earlier install registered in

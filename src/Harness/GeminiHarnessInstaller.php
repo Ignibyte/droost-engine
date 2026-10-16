@@ -34,7 +34,7 @@ final class GeminiHarnessInstaller extends AbstractHarnessInstaller {
    * {@inheritdoc}
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
-    $this->removeJsonServer($root, '.gemini/settings.json', 'mcpServers', $result);
+    $this->syncJsonServer($root, '.gemini/settings.json', 'mcpServers', $context, $result);
     $this->upsertMarkdown($root, 'GEMINI.md', $this->sentencePointer(), $result);
   }
 

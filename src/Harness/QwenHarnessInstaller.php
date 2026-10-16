@@ -34,7 +34,7 @@ final class QwenHarnessInstaller extends AbstractHarnessInstaller {
    * {@inheritdoc}
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
-    $this->removeJsonServer($root, '.qwen/settings.json', 'mcpServers', $result);
+    $this->syncJsonServer($root, '.qwen/settings.json', 'mcpServers', $context, $result);
     $this->upsertMarkdown($root, 'QWEN.md', $this->sentencePointer(), $result);
   }
 

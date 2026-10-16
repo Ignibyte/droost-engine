@@ -29,16 +29,17 @@ final readonly class DroostBlock {
   relying on prior knowledge or walking the file tree — Drupal APIs change
   across versions and model training lags.
 
-  Ask by command: `drush droost:tool` lists the tools, `drush droost:tool
-  <id> help` shows one, and `drush droost:tool <id> '<json>'` runs it (on
-  DDEV from the host, `ddev drush …`). Each call boots the site; batch what
-  you can.
+  Ask by command. Two of them: `vendor/bin/droost` for the code, which
+  boots no Drupal and answers while the site is broken, and `drush
+  droost:tool` for the live site. Either lists its tools with no argument,
+  shows one with `<id> help`, and runs one with `<id> '<json>'`. On DDEV run
+  both in the container: `ddev exec vendor/bin/droost …`, `ddev drush …`.
 
   - The site's facts and its house rules: `drush droost:brief`.
-  - How this project is put together, and how it documents itself: `droost_wiki`.
-  - Find real code in this codebase: `droost_search`, `droost_symbol`, `droost_graph`.
-  - What an installed module gives you: `droost_module_docs`.
-  - Verify what actually exists: `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
+  - How this project is put together, and how it documents itself: `vendor/bin/droost droost_wiki`.
+  - Find real code in this codebase: `vendor/bin/droost` `droost_search`, `droost_symbol`, `droost_graph`.
+  - What an installed module gives you: `vendor/bin/droost droost_module_docs`.
+  - Verify what actually exists: `drush droost:tool` `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
 
   How you build is your call. The site's house rules say what shape the
   result must take, and the run's gates and seeker hold it to them.

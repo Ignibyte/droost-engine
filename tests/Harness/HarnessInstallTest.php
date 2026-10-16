@@ -290,7 +290,8 @@ final class HarnessInstallTest extends TestCase {
     foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__', 'MCP'] as $removed) {
       $this->assertStringNotContainsString($removed, $body);
     }
-    $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask');
+    $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask the site');
+    $this->assertStringContainsString('vendor/bin/droost', $body, 'and how to ask about the code with no site');
     $this->assertStringContainsString('drush droost:brief', $body);
     $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite([], '')))->body());
   }

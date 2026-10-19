@@ -48,7 +48,8 @@ final class RetiredNamesTest extends TestCase {
       if ($file instanceof \SplFileInfo && $file->getExtension() === 'php') {
         $kept = [];
         foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
-          if (is_array($token) && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_DOC_COMMENT], TRUE)) {
+          $read = [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_DOC_COMMENT];
+          if (is_array($token) && in_array($token[0], $read, TRUE)) {
             $kept[] = $token[1];
           }
         }

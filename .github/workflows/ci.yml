@@ -41,7 +41,8 @@ jobs:
         run: vendor/bin/phpcs
 
       - name: Static analysis
-        run: vendor/bin/phpstan analyse
+        # Not the runner's php.ini: phpstan at its 128M default ran out on this tree (2026-10-19).
+        run: vendor/bin/phpstan analyse --memory-limit=1G
 
       - name: Tests
         run: vendor/bin/phpunit

@@ -1,14 +1,15 @@
 # droost/engine
 
-The framework-free engine behind [Droost](https://www.drupal.org/project/droost).
+The framework-free engine behind droost.
 
-Droost is a developer-acceleration toolkit for AI coding agents working on
-Drupal. Most of what it does is not actually Drupal-specific: running a QA
-verify loop, writing AI-harness config files, generating scaffolds, composing
-wiki pages, indexing code. This package is that
-half — plain PHP with no Drupal dependency — so the same logic can serve the
-Drupal module, a standalone CLI, and repo-only tooling that has no installed
-site to boot.
+droost is one command, `droost` (shipped by `droost/workflow`), for an AI
+coding agent working on a Drupal site: what the codebase holds, and the
+gated run the work goes through. It reads files and needs no Drupal; since
+2026-10-19 it is no longer a Drupal module. This package is its engine —
+plain PHP with no Drupal dependency: the code index and its SQLite stores,
+the wiki and search cores, the harness installers that write AGENTS.md and
+each agent's files, and the scaffold blueprints — used by the `droost`
+command and by repo-only tooling (`bin/droost-index`).
 
 Areas (each depends only on `Support` and `Site`, never on a sibling):
 
@@ -54,11 +55,12 @@ installed". The engine itself reads only `coreVersion()` from the port.
 
 ## Status
 
-**0.x — extraction in progress.** Code is being lifted out of the droost module
-area by area (phases B1 through B5 of the extraction plan); each tranche lands
-behind a tagged release before the module switches over to it. Treat the API as
+**0.x.** The code was lifted out of the droost Drupal module area by area
+(phases B1 through B5 of the extraction plan); the module is now retired, and
+the consumer is `droost/workflow`'s `droost` command. Treat the API as
 unstable until 1.0: breaking changes bump the minor, and consumers should pin
-per minor (`~0.1.0`).
+per minor (`~0.1.0`). The entries below are the record as each release
+shipped.
 
 **0.1.1** landed the pilot tranche — `Support\ProjectRoot`, `Support\PathGuard`,
 `Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner`,
@@ -151,6 +153,11 @@ Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
 **Unreleased**:
+- droost leaves Drupal (2026-10-19): `DroostBlock`'s directive names the
+  `droost` command's knowledge commands (`code:wiki`, `code:tree`,
+  `search:arch`, …) instead of drush and MCP, the same words as
+  `droost/workflow`'s `HarnessSetup`, which writes it. The harnesses' MCP
+  entry support stays, so an install can remove an old droost server entry.
 - An install or uninstall keeps every JSON object the user had as an object
   (another server's `"env": {}` was rewritten as `[]`), keeps the keys a user
   added to droost's own entry (`env`, a timeout), and leaves a config that

@@ -261,7 +261,7 @@ final class HarnessInstallTest extends TestCase {
     $this->assertStringContainsString(self::WORKFLOW_BLOCK, $agents, 'the workflow block is untouched');
     $this->assertStringStartsWith("My own notes.\n", $agents, 'the user text is untouched');
     $this->assertLessThan(strpos($agents, '<!-- BEGIN DROOST WORKFLOW -->'), strpos($agents, Markers::MD_BEGIN), 'the block kept its place');
-    $this->assertStringContainsString('## Use Droost first', $agents);
+    $this->assertStringContainsString('## Use droost first', $agents);
     $this->assertStringNotContainsString('droost_guidelines', $agents);
   }
 
@@ -498,14 +498,15 @@ final class HarnessInstallTest extends TestCase {
     $body = (new DroostBlock(new FakeSite('11.4.2')))->body();
 
     $this->assertStringStartsWith('# Droost — Drupal 11.4.2, PHP ', $body);
-    $this->assertStringContainsString('## Use Droost first', $body);
-    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__'] as $removed) {
+    $this->assertStringContainsString('## Use droost first', $body);
+    // Removed tools, and since 2026-10-19 the drush door, MCP and the
+    // Drupal-era tool ids: droost is one command reading files.
+    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__', 'MCP', 'drush', 'droost:tool', 'droost_wiki', 'droost_symbol'] as $removed) {
       $this->assertStringNotContainsString($removed, $body);
     }
-    $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask the site');
-    $this->assertStringContainsString('vendor/bin/droost', $body, 'and how to ask about the code with no site');
-    $this->assertStringContainsString('drush droost:brief', $body);
-    $this->assertStringContainsString('MCP', $body, 'it says the tools are reachable through MCP too');
+    foreach (['droost code:wiki', 'droost code:tree', 'droost search:arch'] as $command) {
+      $this->assertStringContainsString($command, $body, 'it names the knowledge commands plan requires');
+    }
     $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite('')))->body());
   }
 

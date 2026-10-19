@@ -10,8 +10,9 @@ use Droost\Engine\Site\ExtensionLocatorInterface;
  * What droost is, in the one wording every agent-facing surface uses.
  *
  * The AGENTS.md block every harness reads. droost is this codebase's
- * knowledge and the build's runtime: it is asked through MCP or by command,
- * and it prescribes no way to build. What it says here is where to look,
+ * knowledge and the build's runtime: one command, `droost`, reading files
+ * with no Drupal (2026-10-19), and it prescribes no way to build. The same
+ * text as droost/workflow's HarnessSetup::DIRECTIVE, which writes it. What it says here is where to look,
  * how to ask, and that the site's own rules are held by gates and a reviewer.
  */
 final readonly class DroostBlock {
@@ -20,28 +21,26 @@ final readonly class DroostBlock {
    * The directive: look in this codebase before trusting prior knowledge.
    */
   public const string DIRECTIVE = <<<'TXT'
-  ## Use Droost first
+  ## Use droost first
 
-  Droost knows this codebase first-hand: its index, its symbol graph and its
-  wiki are built from this project's own code, core and contrib included.
-  When writing, modifying, reviewing, debugging, or planning ANY Drupal or PHP
-  code in this project, ask it what THIS project actually contains before
-  relying on prior knowledge or walking the file tree — Drupal APIs change
-  across versions and model training lags.
+  droost knows this codebase first-hand: its code index, its structure and
+  its wiki are built from this project's own files, core and contrib
+  included. Before writing, changing, reviewing or planning any Drupal or
+  PHP code here, ask it what THIS project contains rather than trusting
+  prior knowledge: Drupal's APIs change between versions. droost reads files
+  only, so it answers while the site is broken.
 
-  Ask through MCP (droost's server, when installed) or by command; the same
-  tools answer, and every call lands in the same record. By command,
-  `vendor/bin/droost` answers about the code, booting no Drupal, so it works
-  while the site is broken; `drush droost:tool` answers about the live site.
-  Either lists its tools with no argument, shows one with `<id> help`, and
-  runs one with `<id> '<json>'`. On DDEV run both in the container: `ddev
-  exec vendor/bin/droost …`, `ddev drush …`.
+  - `droost code:wiki` — the wiki, and an inventory of every installed module
+    and theme (`droost code:wiki inventory`, `droost code:wiki inventory/<name>`).
+  - `droost code:tree [module|path]` — the code's structure: files, classes,
+    methods, and each module's hooks, services and routes.
+  - `droost search:arch "<words>"` — the documentation, as plain text.
+  - `droost code:symbol`, `droost code:graph`, `droost search:code`,
+    `droost code:docs`, `droost code:deprecations`, `droost brief`.
 
-  - The site's facts and its house rules: `drush droost:brief`.
-  - How this project is put together, and how it documents itself: `vendor/bin/droost droost_wiki`.
-  - Find real code in this codebase: `vendor/bin/droost` `droost_search`, `droost_symbol`, `droost_graph`.
-  - What an installed module gives you: `vendor/bin/droost droost_module_docs`.
-  - Verify what actually exists: `drush droost:tool` `droost_services`, `droost_routes`, `droost_entities`, `droost_db_schema`.
+  `droost` with no argument lists the commands; `droost <command> help`
+  explains one. Plan consults `code:wiki` and `code:tree` before it closes.
+  When the code index is missing or stale, `droost code:index` rebuilds it.
 
   How you build is your call. The site's house rules say what shape the
   result must take, and the run's gates and seeker hold it to them.

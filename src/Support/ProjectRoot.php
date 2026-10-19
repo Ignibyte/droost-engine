@@ -7,7 +7,7 @@ namespace Droost\Engine\Support;
 /**
  * Resolves the project root (the composer root, above the docroot).
  *
- * Harness configs, and the droost_wiki bundle, belong at the project root —
+ * Harness configs, and the wiki bundle, belong at the project root —
  * not inside the web-accessible docroot. On standard layouts that is the
  * docroot's parent; on layouts where Drupal IS the project root (no parent
  * markers), it falls back to the app root.

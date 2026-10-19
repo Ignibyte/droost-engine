@@ -12,8 +12,9 @@ use Droost\Engine\Site\ExtensionLocatorInterface;
  * The AGENTS.md block every harness reads. droost is this codebase's
  * knowledge and the build's runtime: one command, `droost`, reading files
  * with no Drupal (2026-10-19), and it prescribes no way to build. The same
- * text as droost/workflow's HarnessSetup::DIRECTIVE, which writes it. What it says here is where to look,
- * how to ask, and that the site's own rules are held by gates and a reviewer.
+ * text as droost/workflow's HarnessSetup::DIRECTIVE, which writes it. What it
+ * says here is where to look, how to ask, and that the site's own rules are
+ * held by gates and a reviewer.
  */
 final readonly class DroostBlock {
 

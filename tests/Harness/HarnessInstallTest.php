@@ -501,8 +501,12 @@ final class HarnessInstallTest extends TestCase {
     $this->assertStringContainsString('## Use droost first', $body);
     // Removed tools, and since 2026-10-19 the drush door, MCP and the
     // Drupal-era tool ids: droost is one command reading files.
-    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__', 'MCP', 'drush', 'droost:tool', 'droost_wiki', 'droost_symbol'] as $removed) {
-      $this->assertStringNotContainsString($removed, $body);
+    $removed = [
+      'droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide',
+      'mcp__', 'MCP', 'drush', 'droost:tool', 'droost_wiki', 'droost_symbol',
+    ];
+    foreach ($removed as $name) {
+      $this->assertStringNotContainsString($name, $body);
     }
     foreach (['droost code:wiki', 'droost code:tree', 'droost search:arch'] as $command) {
       $this->assertStringContainsString($command, $body, 'it names the knowledge commands plan requires');

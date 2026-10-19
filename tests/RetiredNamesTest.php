@@ -29,7 +29,8 @@ final class RetiredNamesTest extends TestCase {
     '/drush droost/' => 'droost has no drush door',
     '/droost:tool\b/' => 'droost has no drush door',
     '/mcp:server|droost-mcp/' => 'droost ships no MCP server',
-    '/(?<![\w\/.-])droost-workflow (?:status|run|init|reset|bypass|baseline|effort)\b|vendor\/bin\/droost-workflow/' => 'the command is `droost`',
+    '/(?<![\w\/.-])droost-workflow (?:status|run|init|reset|bypass|baseline|effort)\b/' => 'the command is `droost`',
+    '/vendor\/bin\/droost-workflow/' => 'the command is `droost`',
     '/\bdroost_(?:symbol|graph|search|wiki|brief|module_docs|deprecations|tool)\b/' => 'a Drupal-era tool id',
   ];
 

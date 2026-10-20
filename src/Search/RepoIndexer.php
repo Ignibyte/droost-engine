@@ -38,8 +38,10 @@ final class RepoIndexer {
    * declaration guarded by its own absence is no longer a symbol (F-63).
    * v3: a hook an api.php documents is a `hook:NAME` symbol, so an
    * implementation's edge reaches the module that owns the hook (B3).
+   * v4: a call on `$this`, `self::` or `static::` is a `calls` edge to the
+   * method it names, so a protected helper's callers are found.
    */
-  public const int INDEXER_VERSION = 3;
+  public const int INDEXER_VERSION = 4;
 
   /**
    * Constructs a RepoIndexer.

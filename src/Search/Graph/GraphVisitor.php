@@ -12,8 +12,11 @@ use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
@@ -130,7 +133,40 @@ final class GraphVisitor extends NodeVisitorAbstract {
     elseif ($node instanceof StaticCall) {
       $this->staticCall($node);
     }
+    elseif ($node instanceof MethodCall || $node instanceof NullsafeMethodCall) {
+      $this->thisCall($node);
+    }
     return NULL;
+  }
+
+  /**
+   * Records a "calls" edge to the method a call on `$this` reaches.
+   *
+   * `$this->name()` names a method of the enclosing class, so the edge can
+   * point at that method rather than nowhere: without it, every protected
+   * helper read as having no callers, a false "safe to change" (EMT-A run 2:
+   * `formAlter` calling `alterAccountFormWithPortal` left no edge). A call on
+   * any other object is NOT recorded: its receiver's class cannot be known
+   * statically, and guessing would corrupt callers() for every method of the
+   * same name. A method the class inherits is recorded on the calling class,
+   * where it is called, not where it is declared.
+   *
+   * @param \PhpParser\Node\Expr\MethodCall|\PhpParser\Node\Expr\NullsafeMethodCall $node
+   *   The call.
+   */
+  private function thisCall(MethodCall|NullsafeMethodCall $node): void {
+    if (!$node->var instanceof Variable || $node->var->name !== 'this' || !$node->name instanceof Identifier) {
+      return;
+    }
+    $args = $node->args;
+    if (count($args) === 1 && $args[0] instanceof VariadicPlaceholder) {
+      return;
+    }
+    $src = $this->top($this->contextStack);
+    $class = $this->top($this->classStack);
+    if ($src !== '' && $class !== '') {
+      $this->edges[] = ['src' => $src, 'dst' => $class . '::' . $node->name->toString(), 'kind' => 'calls'];
+    }
   }
 
   /**
@@ -148,6 +184,16 @@ final class GraphVisitor extends NodeVisitorAbstract {
       return;
     }
     $this->callEdge($node->class, 'calls');
+    // self::name() and static::name() name a method of the enclosing class:
+    // the edge reaches the method too, as a call on $this does.
+    if ($node->class instanceof Name && in_array(strtolower($node->class->toString()), ['self', 'static'], TRUE)
+      && $node->name instanceof Identifier) {
+      $src = $this->top($this->contextStack);
+      $class = $this->top($this->classStack);
+      if ($src !== '' && $class !== '') {
+        $this->edges[] = ['src' => $src, 'dst' => $class . '::' . $node->name->toString(), 'kind' => 'calls'];
+      }
+    }
     $this->serviceLiteralEdge($node);
   }
 

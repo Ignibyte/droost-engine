@@ -8,10 +8,12 @@ gated run the work goes through. It reads files and needs no Drupal; since
 2026-10-19 it is no longer a Drupal module. This package is its engine —
 plain PHP with no Drupal dependency: the code index and its SQLite stores,
 the wiki and search cores, the harness installers that write AGENTS.md and
-each agent's files, and the scaffold blueprints — used by the `droost`
-command and by repo-only tooling (`bin/droost-index`).
+each agent's files — used by the `droost` command and by repo-only tooling
+(`bin/droost-index`), and the scaffold blueprints and verify loop the
+retired module used.
 
-Areas (each depends only on `Support` and `Site`, never on a sibling):
+Areas (each depends only on `Support` and `Site`, never on a sibling, except
+`Harness`, whose Claude installer writes `Skills`' files):
 
 | Area | What it holds | Landed |
 | --- | --- | --- |
@@ -32,26 +34,25 @@ the **Drush runtime container** — `Drush::hasContainer()`, and Drush's own
 `ApplicationFactory`. Seven blueprints (service, content-entity, config-entity,
 event-subscriber, block, form, plugin) are built on it, and an eighth reflects
 over `DrushCommands` to compute its reserved method list. None of those can
-live in a package that does not depend on Drush, so they stay in the module.
+live in a package that does not depend on Drush, so they stayed in the
+module, and went with it when droost left Drupal (2026-10-19).
 
 What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
 `BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the thirteen
 blueprints that emit from templates rather than delegating: access-handler,
 ckeditor5-plugin, config-schema, functional-test, hook, kernel-test,
 media-source, migrate, plugin-deriver, recipe, route-subscriber, sdc and
-views-handler. The registry accepts both halves, so a consumer sees one set.
-
-That the two halves are wired together at the container rather than merged is
-the point: the contract is framework-free even where an implementation is not.
+views-handler. The registry accepted both halves, so the module's consumers
+saw one set. The `droost` command scaffolds nothing: today no consumer
+registers either half, and the same is true of the `Verify` loop.
 
 ## The `Site` port
 
-`Site\ExtensionLocatorInterface` is how everything else asks what the project
-has: the installed extensions, where one lives, and the core version. The
-engine runs both inside a booted site, where absence is a fact, and against a
-bare checkout, where it is not knowable, so an empty answer from a locator
-that cannot ask the site (`Site\UnknownSite`) means "cannot tell", never "not
-installed". The engine itself reads only `coreVersion()` from the port.
+`Site\ExtensionLocatorInterface` is what the engine may ask the site, and all
+it asks is the core version it stamps content with (`coreVersion()`; the
+port's `installed()` and `path()` went in 0.11.0). The `droost` command boots
+no site, so a locator that cannot ask one (`Site\UnknownSite`) answers `''`,
+which means "cannot tell", never a guess.
 
 ## Status
 
@@ -158,6 +159,18 @@ in from elsewhere is still found at its link.
   `search:arch`, …) instead of drush and MCP, the same words as
   `droost/workflow`'s `HarnessSetup`, which writes it. The harnesses' MCP
   entry support stays, so an install can remove an old droost server entry.
+- A call on `$this` (or `$this?->`), `self::` or `static::` is a `calls` edge
+  to the method it names, so a protected helper called only through `$this`
+  no longer reads as having no callers (F-322). A call on any other object
+  stays unrecorded: its class cannot be known statically.
+  `RepoIndexer::INDEXER_VERSION` is 4, so an existing index rebuilds.
+
+**0.11.1** — symbol and edge queries list a site's own rows before core's
+(F-297). A site's index may carry core's symbols, and ordered by name alone
+`Drupal\Core\…` filled a limited search before the site's own class was
+reached.
+
+**0.11.0** — the seekers' cleanup:
 - An install or uninstall keeps every JSON object the user had as an object
   (another server's `"env": {}` was rewritten as `[]`), keeps the keys a user
   added to droost's own entry (`env`, a timeout), and leaves a config that
@@ -262,13 +275,15 @@ repository with none.
 ```
 composer install
 vendor/bin/phpcs
-vendor/bin/phpstan analyse
+vendor/bin/phpstan analyse --memory-limit=1G
 vendor/bin/phpunit
 ```
 
-Coding standards are Drupal + DrupalPractice (`phpcs.xml.dist`), matching the
-module so lifted files diff to near-zero. PHPStan runs at level max with an
-empty baseline. CI runs all four on PHP 8.3 and 8.4.
+Coding standards are Drupal + DrupalPractice (`phpcs.xml.dist`), the same as
+`droost/workflow`'s, so code lifted from the retired module diffs to
+near-zero. PHPStan runs at level max with an empty baseline; the tree
+outgrew its 128M default memory. CI runs `composer validate --strict` and
+these three on PHP 8.3 and 8.4.
 
 ## License
 

@@ -45,9 +45,7 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
     // round-trip; if that is the only config present, don't clobber it with a
     // second opencode.json — tell the user to edit it by hand.
     if (!is_file($root . '/opencode.json') && is_file($root . '/opencode.jsonc')) {
-      $result->addWarning($context->server === NULL
-        ? 'opencode.jsonc found; add "./AGENTS.md" to its instructions manually, and remove any droost MCP server from it (JSONC cannot be safely rewritten).'
-        : 'opencode.jsonc found; add the droost MCP server and "./AGENTS.md" to its instructions manually (JSONC cannot be safely rewritten).');
+      $result->addWarning('opencode.jsonc found; add "./AGENTS.md" to its instructions manually, and remove any droost MCP server from it (JSONC cannot be safely rewritten).');
       return;
     }
     if (JsonMerge::isMalformed($root . '/opencode.json')) {
@@ -55,13 +53,7 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
       return;
     }
     $before = JsonMerge::read($root . '/opencode.json');
-    $data = $context->server === NULL
-      ? JsonMerge::unsetPath($before, 'mcp', 'droost')
-      : JsonMerge::mergePath($before, 'mcp', 'droost', [
-        'type' => 'local',
-        'command' => [$context->server['command'], ...$context->server['args']],
-        'enabled' => TRUE,
-      ]);
+    $data = JsonMerge::unsetPath($before, 'mcp', 'droost');
     $instructions = (isset($data['instructions']) && is_array($data['instructions'])) ? $data['instructions'] : [];
     if (!in_array(self::AGENTS_POINTER, $instructions, TRUE)) {
       $instructions[] = self::AGENTS_POINTER;

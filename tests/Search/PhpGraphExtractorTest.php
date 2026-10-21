@@ -67,6 +67,46 @@ PHP;
   }
 
   /**
+   * A call on $this, self:: or static:: reaches the method it names.
+   *
+   * EMT-A run 2: `code:graph` read "0 callers" for a protected hook helper
+   * that `formAlter` called through `$this->`. A call on another object stays
+   * unrecorded: its class cannot be known statically.
+   */
+  public function testCallsOnThisReachTheMethod(): void {
+    $code = <<<'PHP'
+<?php
+
+namespace Drupal\fx\Hook;
+
+final class FxHooks {
+
+  public function formAlter(array &$form): void {
+    $this->alterAccountForm($form);
+    $this?->tidy();
+    self::helper();
+    static::other();
+    $this->client->send();
+    $first = $this->alterAccountForm(...);
+  }
+
+  protected function alterAccountForm(array &$form): void {}
+
+}
+PHP;
+    $result = (new PhpGraphExtractor())->extract($code, 'modules/custom/fx/src/Hook/FxHooks.php', 'fx');
+    $edges = array_map(static fn(array $e): string => $e['src'] . '|' . $e['dst'] . '|' . $e['kind'], $result['edges']);
+
+    $from = 'Drupal\fx\Hook\FxHooks::formAlter|Drupal\fx\Hook\FxHooks::';
+    $this->assertContains($from . 'alterAccountForm|calls', $edges);
+    $this->assertContains($from . 'tidy|calls', $edges, 'a nullsafe call on $this too');
+    $this->assertContains($from . 'helper|calls', $edges, 'self::');
+    $this->assertContains($from . 'other|calls', $edges, 'static::');
+    $this->assertNotContains($from . 'send|calls', $edges, 'a call on another object is not guessed');
+    $this->assertSame(1, count(array_filter($edges, static fn(string $e): bool => str_ends_with($e, 'alterAccountForm|calls'))), 'a first-class callable is not a call');
+  }
+
+  /**
    * Namespace and declare blocks do not make a declaration conditional.
    */
   public function testDeclarationsInNamespaceAndDeclareBlocksAreRecorded(): void {

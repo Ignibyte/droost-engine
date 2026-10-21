@@ -9,14 +9,14 @@ use Droost\Engine\Skills\SkillMdWriter;
 use Droost\Engine\Skills\SkillProvider;
 
 /**
- * Claude Code: `.mcp.json`, a CLAUDE.md import, the skills and the commands.
+ * Claude Code: `.mcp.json`, a CLAUDE.md import and the skills.
  *
- * `.mcp.json` carries droost's MCP server when the install has one; CLAUDE.md
+ * `.mcp.json` loses the MCP server entry an earlier droost wrote; CLAUDE.md
  * imports AGENTS.md.
  *
  * Also renders Droost's skills as native Claude Agent Skills under
- * `.claude/skills/<name>/SKILL.md`, the slash commands under
- * `.claude/commands/`, and sweeps the skills droost no longer ships.
+ * `.claude/skills/<name>/SKILL.md`, and sweeps the skills droost no longer
+ * ships.
  *
  * The CLAUDE.md import is the only road by which Claude Code reads AGENTS.md
  * — and so the only road by which the build pipeline's own block in it
@@ -41,13 +41,10 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
    *   The skill provider.
    * @param \Droost\Engine\Skills\SkillMdWriter $writer
    *   The shared SKILL.md renderer (the single format authority).
-   * @param \Droost\Engine\Harness\CommandProvider|null $commands
-   *   The slash-command provider, or NULL for a consumer shipping none.
    */
   public function __construct(
     private readonly SkillProvider $skills,
     private readonly SkillMdWriter $writer,
-    private readonly ?CommandProvider $commands = NULL,
   ) {}
 
   /**
@@ -77,7 +74,7 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
    * {@inheritdoc}
    */
   public function install(string $root, InstallContext $context, InstallResult $result): void {
-    $this->syncJsonServer($root, '.mcp.json', 'mcpServers', $context, $result);
+    $this->removeJsonServer($root, '.mcp.json', 'mcpServers', $result);
     $this->upsertMarkdown($root, 'CLAUDE.md', $this->importPointer(), $result);
     $emitted = [];
     foreach ($this->skills->getSkills() as $skill) {
@@ -94,15 +91,6 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       $result->addWritten($dir . '/SKILL.md');
     }
     $this->sweepRetired($root, $emitted, $result);
-    // Commands are single files in a directory shared with the user's own:
-    // refresh exactly the provided names, touch nothing else. The names are
-    // droost-prefixed by convention, which is what keeps "refresh" from
-    // ever meaning "clobber something a human wrote".
-    foreach ($this->commands?->getCommands() ?? [] as $name => $content) {
-      $relative = '.claude/commands/' . $name . '.md';
-      $this->write($root, $relative, $content);
-      $result->addWritten($relative);
-    }
   }
 
   /**
@@ -119,29 +107,6 @@ final class ClaudeHarnessInstaller extends AbstractHarnessInstaller {
       if (is_file($absolute . '/' . self::SENTINEL)) {
         $this->removeSkill($root, basename($absolute), 'skill', $result);
       }
-    }
-    // Commands: remove exactly the names this provider ships, nothing else —
-    // the same contract as install, mirrored. Nested names then prune the
-    // subdirectories they implied, deepest first and only while empty, so a
-    // user file dropped beside ours keeps its directory alive.
-    $prune = [];
-    foreach (array_keys($this->commands?->getCommands() ?? []) as $name) {
-      $relative = '.claude/commands/' . $name . '.md';
-      if (is_file($root . '/' . $relative)) {
-        @unlink($root . '/' . $relative);
-        $result->addRemoved($relative . ' (command)');
-      }
-      $dir = dirname('.claude/commands/' . $name);
-      while ($dir !== '.claude/commands') {
-        $prune[$dir] = TRUE;
-        $dir = dirname($dir);
-      }
-    }
-    $dirs = array_keys($prune);
-    usort($dirs, static fn (string $a, string $b): int =>
-      substr_count($b, '/') <=> substr_count($a, '/'));
-    foreach ($dirs as $dir) {
-      $this->removeDirIfEmpty($root, $dir);
     }
   }
 

@@ -1,64 +1,44 @@
 # droost/engine
 
-The framework-free engine behind [Droost](https://www.drupal.org/project/droost).
+The framework-free engine behind droost.
 
-Droost is a developer-acceleration toolkit for AI coding agents working on
-Drupal. Most of what it does is not actually Drupal-specific: running a QA
-verify loop, writing AI-harness config files, generating scaffolds, composing
-wiki pages, indexing code. This package is that
-half — plain PHP with no Drupal dependency — so the same logic can serve the
-Drupal module, a standalone CLI, and repo-only tooling that has no installed
-site to boot.
+droost is one command, `droost` (shipped by `droost/workflow`), for an AI
+coding agent working on a Drupal site: what the codebase holds, and the
+gated run the work goes through. It reads files and needs no Drupal; since
+2026-10-19 it is no longer a Drupal module. This package is its engine —
+plain PHP with no Drupal dependency: the code index and its SQLite stores,
+the wiki and search cores, the harness installers that write AGENTS.md and
+each agent's files — used by the `droost` command and by repo-only tooling
+(`bin/droost-index`).
 
-Areas (each depends only on `Support` and `Site`, never on a sibling):
+Areas (each depends only on `Support` and `Site`, never on a sibling, except
+`Harness`, whose Claude installer writes `Skills`' files):
 
 | Area | What it holds | Landed |
 | --- | --- | --- |
-| `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
+| `Support` | Shared primitives: path guards, core version, YAML | yes |
 | `Site` | What the engine may know about the site it runs against (its core version), and who owns an extension's code | yes |
-| `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
 | `Skills` | Skill emitters: droost's own skill files rendered as SKILL.md | yes |
-| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
-| `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
-| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
+| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) and remove the MCP entry an earlier droost wrote | yes |
+| `Wiki` | OKF wiki core: frontmatter, provenance, file hashing, bundle reading | yes |
 | `Search` | Code search and graph core: chunkers, extractors, index diffing, the SQLite stores droost's code index lives in, and the repo-only indexer (`bin/droost-index`) | yes |
-
-## Why `Scaffold` is a partial lift
-
-The scaffold area splits along a line that is not negotiable. Droost composes
-Drush's ~70 code generators rather than reinventing them, and that runner needs
-the **Drush runtime container** — `Drush::hasContainer()`, and Drush's own
-`ApplicationFactory`. Seven blueprints (service, content-entity, config-entity,
-event-subscriber, block, form, plugin) are built on it, and an eighth reflects
-over `DrushCommands` to compute its reserved method list. None of those can
-live in a package that does not depend on Drush, so they stay in the module.
-
-What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
-`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the thirteen
-blueprints that emit from templates rather than delegating: access-handler,
-ckeditor5-plugin, config-schema, functional-test, hook, kernel-test,
-media-source, migrate, plugin-deriver, recipe, route-subscriber, sdc and
-views-handler. The registry accepts both halves, so a consumer sees one set.
-
-That the two halves are wired together at the container rather than merged is
-the point: the contract is framework-free even where an implementation is not.
 
 ## The `Site` port
 
-`Site\ExtensionLocatorInterface` is how everything else asks what the project
-has: the installed extensions, where one lives, and the core version. The
-engine runs both inside a booted site, where absence is a fact, and against a
-bare checkout, where it is not knowable, so an empty answer from a locator
-that cannot ask the site (`Site\UnknownSite`) means "cannot tell", never "not
-installed". The engine itself reads only `coreVersion()` from the port.
+`Site\ExtensionLocatorInterface` is what the engine may ask the site, and all
+it asks is the core version it stamps content with (`coreVersion()`; the
+port's `installed()` and `path()` went in 0.11.0). The `droost` command boots
+no site, so a locator that cannot ask one (`Site\UnknownSite`) answers `''`,
+which means "cannot tell", never a guess.
 
 ## Status
 
-**0.x — extraction in progress.** Code is being lifted out of the droost module
-area by area (phases B1 through B5 of the extraction plan); each tranche lands
-behind a tagged release before the module switches over to it. Treat the API as
+**0.x.** The code was lifted out of the droost Drupal module area by area
+(phases B1 through B5 of the extraction plan); the module is now retired, and
+the consumer is `droost/workflow`'s `droost` command. Treat the API as
 unstable until 1.0: breaking changes bump the minor, and consumers should pin
-per minor (`~0.1.0`).
+per minor (`~0.1.0`). The entries below are the record as each release
+shipped.
 
 **0.1.1** landed the pilot tranche — `Support\ProjectRoot`, `Support\PathGuard`,
 `Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner`,
@@ -73,7 +53,8 @@ files for Claude, Codex, Gemini, opencode and Qwen. The minor bumps because
 consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
 
 **0.3.0** adds the scaffold spine and the eight template-only blueprints (B3),
-for the reasons in "Why `Scaffold` is a partial lift" above.
+(the Drush-backed half stayed in the module; this half left on 2026-10-21,
+see Unreleased).
 
 **0.4.0** adds the OKF wiki core (B4) — frontmatter parsing, provenance,
 page composition, bundle reading — plus `Support\Yaml`, which reproduces
@@ -151,6 +132,32 @@ Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
 **Unreleased**:
+- The retired module's code is gone (2026-10-21; its runs on the owner's
+  sites were tests, so nothing reads its shape): the `Scaffold` area and
+  its thirteen blueprints, the `Verify` loop (and the `symfony/process` and
+  `psr/log` requirements), `HarnessRegistry`, `DroostBlock` (droost/workflow's
+  `HarnessSetup` writes the block), `CommandProvider`, the wiki's
+  `PageComposer`, `PageRenderer`, `GenerationRow` and `ComposeException`, and
+  `Support\GitHead`, `SecretRedactor` and `ProjectRoot`.
+- The harnesses write no MCP server: `InstallContext` carries the block body
+  only, and every install removes the entry an earlier droost wrote, as
+  uninstall does. `Toml`, `JsonMerge::setPath()` and `mergePath()` are gone;
+  `Markers::TOML_*` stay, to find Codex's old region.
+- droost leaves Drupal (2026-10-19): the directive names the `droost`
+  command's knowledge commands (`code:wiki`, `code:tree`, `search:arch`, …)
+  instead of drush and MCP.
+- A call on `$this` (or `$this?->`), `self::` or `static::` is a `calls` edge
+  to the method it names, so a protected helper called only through `$this`
+  no longer reads as having no callers (F-322). A call on any other object
+  stays unrecorded: its class cannot be known statically.
+  `RepoIndexer::INDEXER_VERSION` is 4, so an existing index rebuilds.
+
+**0.11.1** — symbol and edge queries list a site's own rows before core's
+(F-297). A site's index may carry core's symbols, and ordered by name alone
+`Drupal\Core\…` filled a limited search before the site's own class was
+reached.
+
+**0.11.0** — the seekers' cleanup:
 - An install or uninstall keeps every JSON object the user had as an object
   (another server's `"env": {}` was rewritten as `[]`), keeps the keys a user
   added to droost's own entry (`env`, a timeout), and leaves a config that
@@ -238,8 +245,6 @@ It also has two fixes:
 - The kernel-test and functional-test blueprints keep a class name that
   already ends in `Test`.
 
-The rest of `Support` (clock, state store) arrives with the areas that need it.
-
 ## Install
 
 ```
@@ -255,13 +260,14 @@ repository with none.
 ```
 composer install
 vendor/bin/phpcs
-vendor/bin/phpstan analyse
+vendor/bin/phpstan analyse --memory-limit=1G
 vendor/bin/phpunit
 ```
 
-Coding standards are Drupal + DrupalPractice (`phpcs.xml.dist`), matching the
-module so lifted files diff to near-zero. PHPStan runs at level max with an
-empty baseline. CI runs all four on PHP 8.3 and 8.4.
+Coding standards are Drupal + DrupalPractice (`phpcs.xml.dist`), the same as
+`droost/workflow`'s. PHPStan runs at level max with an empty baseline; the tree
+outgrew its 128M default memory. CI runs `composer validate --strict` and
+these three on PHP 8.3 and 8.4.
 
 ## License
 

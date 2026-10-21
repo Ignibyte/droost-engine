@@ -7,7 +7,7 @@ namespace Droost\Engine\Harness;
 /**
  * Accumulates the outcome of an install or uninstall across harnesses.
  *
- * Structured (rather than IO-scraped) so the Drush command renders a uniform
+ * Structured (rather than IO-scraped) so `droost init` renders a uniform
  * summary and tests assert on outcomes directly.
  */
 final class InstallResult {

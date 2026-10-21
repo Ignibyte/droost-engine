@@ -7,9 +7,8 @@ namespace Droost\Engine\Tests\Harness;
 use Droost\Engine\Harness\AgentsHarnessInstaller;
 use Droost\Engine\Harness\ClaudeHarnessInstaller;
 use Droost\Engine\Harness\CodexHarnessInstaller;
-use Droost\Engine\Harness\DroostBlock;
 use Droost\Engine\Harness\GeminiHarnessInstaller;
-use Droost\Engine\Harness\HarnessRegistry;
+use Droost\Engine\Harness\InstallContext;
 use Droost\Engine\Harness\InstallResult;
 use Droost\Engine\Harness\Markers;
 use Droost\Engine\Harness\OpencodeHarnessInstaller;
@@ -27,17 +26,22 @@ use PHPUnit\Framework\TestCase;
  * could hang off one switch unnoticed: the guidelines, and the only road by
  * which a build pipeline's AGENTS.md block reaches four of the editors.
  */
-#[CoversClass(HarnessRegistry::class)]
 #[CoversClass(ClaudeHarnessInstaller::class)]
 #[CoversClass(AgentsHarnessInstaller::class)]
-#[CoversClass(DroostBlock::class)]
+#[CoversClass(CodexHarnessInstaller::class)]
+#[CoversClass(OpencodeHarnessInstaller::class)]
 #[CoversClass(SkillMdWriter::class)]
 final class HarnessInstallTest extends TestCase {
 
   /**
-   * The MCP server droost's installer passes on DDEV.
+   * The MCP server entry an earlier droost wrote, which every install removes.
    */
   private const array SERVER = ['command' => 'ddev', 'args' => ['exec', 'php', 'vendor/bin/droost-mcp']];
+
+  /**
+   * The AGENTS.md block body each install writes.
+   */
+  private const string BLOCK = "# Droost\n\n## Use droost first\n\n`droost code:wiki`, `droost code:tree`.";
 
   /**
    * The pipeline's own AGENTS.md block, which the harness must never touch.
@@ -84,46 +88,6 @@ final class HarnessInstallTest extends TestCase {
     $this->install('all');
 
     $this->assertSame($first, $this->snapshot());
-
-    $this->install('all', self::SERVER);
-    $withServer = $this->snapshot();
-    $this->install('all', self::SERVER);
-    $this->assertSame($withServer, $this->snapshot(), 'a second install with the server changes nothing either');
-  }
-
-  /**
-   * With a server, every harness writes droost's entry beside its others.
-   *
-   * The shapes are the ones each client reads: `mcpServers` for Claude Code,
-   * Gemini and Qwen; a fenced `[mcp_servers.droost]` table for Codex; a
-   * `local` entry with the command as one list for opencode.
-   */
-  public function testInstallWritesTheDroostServerEverywhere(): void {
-    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
-      'mcpServers' => ['playwright' => ['command' => 'npx']],
-    ]));
-    @mkdir($this->root . '/.codex');
-    file_put_contents($this->root . '/.codex/config.toml', "model = \"x\"\n");
-    file_put_contents($this->root . '/opencode.json', (string) json_encode(['theme' => 'dark']));
-
-    $result = $this->install('all', self::SERVER);
-
-    $this->assertSame(['command' => 'npx'], $this->entry('.mcp.json', 'mcpServers', 'playwright'), 'the user\'s server is kept');
-    $this->assertSame(self::SERVER, $this->entry('.mcp.json', 'mcpServers', 'droost'));
-    foreach (['.gemini/settings.json', '.qwen/settings.json'] as $file) {
-      $this->assertSame(self::SERVER, $this->entry($file, 'mcpServers', 'droost'), $file);
-    }
-    $codex = (string) file_get_contents($this->root . '/.codex/config.toml');
-    $this->assertStringContainsString('model = "x"', $codex);
-    $this->assertStringContainsString("[mcp_servers.droost]\ncommand = \"ddev\"\nargs = [\"exec\", \"php\", \"vendor/bin/droost-mcp\"]", $codex);
-    $this->assertSame(
-      ['type' => 'local', 'command' => ['ddev', 'exec', 'php', 'vendor/bin/droost-mcp'], 'enabled' => TRUE],
-      $this->entry('opencode.json', 'mcp', 'droost'),
-    );
-    $opencode = json_decode((string) file_get_contents($this->root . '/opencode.json'), TRUE);
-    $this->assertIsArray($opencode);
-    $this->assertSame('dark', $opencode['theme']);
-    $this->assertContains('.mcp.json', $result->written);
   }
 
   /**
@@ -133,61 +97,38 @@ final class HarnessInstallTest extends TestCase {
    * on every install and uninstall, which its client may refuse.
    */
   public function testEmptyObjectsSurviveInstallAndUninstall(): void {
-    $raw = '{"mcpServers":{"other":{"command":"x","args":[],"env":{}}},"x":{},"y":{"0":"a"}}';
+    $raw = '{"mcpServers":{"other":{"command":"x","args":[],"env":{}},"droost":{"command":"ddev"}},"x":{},"y":{"0":"a"}}';
     file_put_contents($this->root . '/.mcp.json', $raw);
-    file_put_contents($this->root . '/opencode.json', '{"mcp":{"other":{"type":"local","command":["x"],"environment":{}}},"x":{}}');
+    file_put_contents($this->root . '/opencode.json', '{"mcp":{"other":{"type":"local","command":["x"],"environment":{}},"droost":{"type":"local"}},"x":{}}');
 
-    $this->install('all', self::SERVER);
+    $this->install('all');
+    $this->assertNull($this->entry('.mcp.json', 'mcpServers', 'droost'), 'the old entry is removed');
     $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'x'), 'a top-level {} is still an object');
     $this->assertInstanceOf(\stdClass::class, $this->node('opencode.json', 'x'));
     $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'mcpServers', 'other', 'env'), 'a sibling server\'s env is still an object');
     $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'y'), 'an object keyed like a list is still an object');
     $this->assertInstanceOf(\stdClass::class, $this->node('opencode.json', 'mcp', 'other', 'environment'));
 
-    $this->registry()->uninstall($this->root, 'all');
+    file_put_contents($this->root . '/.mcp.json', $raw);
+    $this->uninstall();
     $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'mcpServers', 'other', 'env'), 'and after uninstall');
     $this->assertInstanceOf(\stdClass::class, $this->node('.mcp.json', 'x'));
   }
 
   /**
-   * What the user added to droost's own entry survives a re-install.
+   * A config with no droost entry is not rewritten.
    */
-  public function testUserKeysInDroostsEntrySurvive(): void {
-    $env = ['DROOST_MCP_TIMEOUT' => '120'];
-    file_put_contents($this->root . '/.mcp.json', (string) json_encode([
-      'mcpServers' => ['droost' => ['command' => 'old', 'env' => $env]],
-    ]));
-    file_put_contents($this->root . '/opencode.json', (string) json_encode([
-      'mcp' => ['droost' => ['type' => 'local', 'command' => ['old'], 'environment' => $env]],
-    ]));
-
-    $this->install('all', self::SERVER);
-
-    $entry = $this->entry('.mcp.json', 'mcpServers', 'droost');
-    $this->assertIsArray($entry);
-    $this->assertSame('ddev', $entry['command']);
-    $this->assertSame(self::SERVER['args'], $entry['args']);
-    $this->assertSame(['DROOST_MCP_TIMEOUT' => '120'], $entry['env']);
-    $opencode = $this->entry('opencode.json', 'mcp', 'droost');
-    $this->assertIsArray($opencode);
-    $this->assertSame(['DROOST_MCP_TIMEOUT' => '120'], $opencode['environment']);
-    $this->assertSame(['ddev', 'exec', 'php', 'vendor/bin/droost-mcp'], $opencode['command']);
-  }
-
-  /**
-   * A config already holding droost's entry is not rewritten.
-   */
-  public function testAnInstalledConfigKeepsItsFormatting(): void {
-    $raw = "{\n  \"mcpServers\": {\n    \"droost\": {\"command\": \"ddev\", \"args\": [\"exec\", \"php\", \"vendor/bin/droost-mcp\"]}\n  }\n}\n";
+  public function testConfigWithoutDroostKeepsItsFormatting(): void {
+    $raw = "{\n  \"mcpServers\": {\n    \"playwright\": {\"command\": \"npx\"}\n  }\n}\n";
     file_put_contents($this->root . '/.mcp.json', $raw);
 
-    $this->install('claude', self::SERVER);
+    $this->install('claude');
 
     $this->assertSame($raw, file_get_contents($this->root . '/.mcp.json'));
   }
 
   /**
-   * A droost server Codex already has, in any spelling, is not defined twice.
+   * A droost server written by hand, outside droost's region, is the user's.
    */
   public function testCodexHandWrittenDroostInAnySpellingIsLeftAlone(): void {
     $spellings = [
@@ -202,27 +143,23 @@ final class HarnessInstallTest extends TestCase {
     @mkdir($this->root . '/.codex');
     foreach ($spellings as $toml) {
       file_put_contents($this->root . '/.codex/config.toml', $toml);
-      $result = $this->install('codex', self::SERVER);
+      $this->install('codex');
       $this->assertSame($toml, file_get_contents($this->root . '/.codex/config.toml'), $toml);
-      $this->assertNotSame([], array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'already defines mcp_servers.droost')), $toml);
     }
-
-    $commented = "# [mcp_servers.droost] is ours now\n[mcp_servers.other]\ncommand = \"y\"\n";
-    file_put_contents($this->root . '/.codex/config.toml', $commented);
-    $this->install('codex', self::SERVER);
-    $this->assertStringContainsString("[mcp_servers.droost]\ncommand = \"ddev\"", (string) file_get_contents($this->root . '/.codex/config.toml'), 'a comment or another server is not a definition');
   }
 
   /**
-   * A config that is not valid JSON is left alone, and the install says so.
+   * A config that is not valid JSON is left alone.
    */
-  public function testMalformedConfigIsRefused(): void {
+  public function testMalformedConfigIsLeftAlone(): void {
     file_put_contents($this->root . '/.mcp.json', '{"mcpServers": {');
+    file_put_contents($this->root . '/opencode.json', '{"mcp": {');
 
-    $result = $this->install('claude', self::SERVER);
+    $result = $this->install('all');
 
     $this->assertSame('{"mcpServers": {', file_get_contents($this->root . '/.mcp.json'));
-    $this->assertNotSame([], array_filter($result->warnings, static fn (string $w): bool => str_contains($w, '.mcp.json is present but not valid JSON')));
+    $this->assertSame('{"mcp": {', file_get_contents($this->root . '/opencode.json'));
+    $this->assertNotSame([], array_filter($result->warnings, static fn (string $w): bool => str_contains($w, 'opencode.json is present but not valid JSON')));
   }
 
   /**
@@ -230,11 +167,12 @@ final class HarnessInstallTest extends TestCase {
    */
   public function testUninstallRemovesTheServer(): void {
     file_put_contents($this->root . '/.mcp.json', (string) json_encode([
-      'mcpServers' => ['playwright' => ['command' => 'npx']],
+      'mcpServers' => ['playwright' => ['command' => 'npx'], 'droost' => self::SERVER],
     ]));
-    $this->install('all', self::SERVER);
+    @mkdir($this->root . '/.codex');
+    file_put_contents($this->root . '/.codex/config.toml', "model = \"x\"\n" . Markers::TOML_BEGIN . "\n[mcp_servers.droost]\ncommand = \"ddev\"\n" . Markers::TOML_END . "\n");
 
-    $this->registry()->uninstall($this->root, 'all');
+    $this->uninstall();
 
     $this->assertNull($this->entry('.mcp.json', 'mcpServers', 'droost'));
     $this->assertSame(['command' => 'npx'], $this->entry('.mcp.json', 'mcpServers', 'playwright'));
@@ -261,7 +199,7 @@ final class HarnessInstallTest extends TestCase {
     $this->assertStringContainsString(self::WORKFLOW_BLOCK, $agents, 'the workflow block is untouched');
     $this->assertStringStartsWith("My own notes.\n", $agents, 'the user text is untouched');
     $this->assertLessThan(strpos($agents, '<!-- BEGIN DROOST WORKFLOW -->'), strpos($agents, Markers::MD_BEGIN), 'the block kept its place');
-    $this->assertStringContainsString('## Use Droost first', $agents);
+    $this->assertStringContainsString('## Use droost first', $agents);
     $this->assertStringNotContainsString('droost_guidelines', $agents);
   }
 
@@ -389,7 +327,7 @@ final class HarnessInstallTest extends TestCase {
     $this->plantSkill('drupal-edited', $written, SkillMdWriter::sentinel($written));
     file_put_contents($this->root . '/.claude/skills/drupal-edited/SKILL.md', "Edited.\n");
 
-    $result = $this->registry()->uninstall($this->root, 'all');
+    $result = $this->uninstall();
 
     $this->assertDirectoryDoesNotExist($this->root . '/.claude/skills/documenting-changes', 'an untouched droost skill is removed');
     $this->assertFileExists($this->root . '/.claude/skills/drupal-notes/notes.md', 'a user\'s file is never deleted');
@@ -409,7 +347,7 @@ final class HarnessInstallTest extends TestCase {
     mkdir($this->root . '/.claude/skills', 0777, TRUE);
     symlink($target, $this->root . '/.claude/skills/drupal-linked');
 
-    $result = $this->registry()->uninstall($this->root, 'all');
+    $result = $this->uninstall();
 
     $this->assertTrue(is_link($this->root . '/.claude/skills/drupal-linked'), 'the link is left in place');
     $this->assertFileExists($target . '/SKILL.md', 'and so is what it points at');
@@ -455,7 +393,7 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
-   * An install with no server (`--no-mcp`) removes droost's MCP entry.
+   * Every install removes the MCP entry an earlier droost wrote.
    *
    * Every other server and key is kept, and a file left holding nothing is
    * removed.
@@ -492,36 +430,34 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
-   * What droost is, stamped with the version, and naming no removed tool.
-   */
-  public function testDroostBlockNamesNoRemovedTool(): void {
-    $body = (new DroostBlock(new FakeSite('11.4.2')))->body();
-
-    $this->assertStringStartsWith('# Droost — Drupal 11.4.2, PHP ', $body);
-    $this->assertStringContainsString('## Use Droost first', $body);
-    foreach (['droost_guidelines', 'droost_module_patterns', 'droost_consult', 'droost_decide', 'mcp__'] as $removed) {
-      $this->assertStringNotContainsString($removed, $body);
-    }
-    $this->assertStringContainsString('drush droost:tool', $body, 'it says how to ask the site');
-    $this->assertStringContainsString('vendor/bin/droost', $body, 'and how to ask about the code with no site');
-    $this->assertStringContainsString('drush droost:brief', $body);
-    $this->assertStringContainsString('MCP', $body, 'it says the tools are reachable through MCP too');
-    $this->assertStringStartsWith('# Droost — Drupal version unknown, PHP ', (new DroostBlock(new FakeSite('')))->body());
-  }
-
-  /**
-   * Runs one install against the project root.
+   * Runs one install against the project root, AGENTS.md first.
    *
    * @param string $harness
-   *   The harness selection.
-   * @param array{command: string, args: list<string>}|null $server
-   *   droost's MCP server, or NULL for none.
+   *   Either "all" or one harness id (AGENTS.md is always included).
    *
    * @return \Droost\Engine\Harness\InstallResult
    *   The result.
    */
-  private function install(string $harness, ?array $server = NULL): InstallResult {
-    return $this->registry()->install($this->root, $harness, $server);
+  private function install(string $harness): InstallResult {
+    $result = new InstallResult();
+    foreach ($this->installers($harness) as $installer) {
+      $installer->install($this->root, new InstallContext(self::BLOCK), $result);
+    }
+    return $result;
+  }
+
+  /**
+   * Runs an uninstall of every harness against the project root.
+   *
+   * @return \Droost\Engine\Harness\InstallResult
+   *   The result.
+   */
+  private function uninstall(): InstallResult {
+    $result = new InstallResult();
+    foreach ($this->installers('all') as $installer) {
+      $installer->uninstall($this->root, $result);
+    }
+    return $result;
   }
 
   /**
@@ -564,21 +500,27 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
-   * The registry every install and uninstall uses.
+   * The installers a selection names, AGENTS.md first.
    *
-   * @return \Droost\Engine\Harness\HarnessRegistry
-   *   The registry, with every harness.
+   * @param string $harness
+   *   Either "all" or one harness id.
+   *
+   * @return array<string, \Droost\Engine\Harness\HarnessInstallerInterface>
+   *   The installers, keyed by id.
    */
-  private function registry(): HarnessRegistry {
-    return new HarnessRegistry(
-      new DroostBlock(new FakeSite('11.4.2')),
+  private function installers(string $harness): array {
+    $all = [];
+    foreach ([
       new AgentsHarnessInstaller(),
       new ClaudeHarnessInstaller(new SkillProvider($this->skillsDir), $this->writer()),
       new CodexHarnessInstaller(),
       new QwenHarnessInstaller(),
       new GeminiHarnessInstaller(),
       new OpencodeHarnessInstaller(),
-    );
+    ] as $installer) {
+      $all[$installer->getId()] = $installer;
+    }
+    return $harness === 'all' ? $all : ['agents' => $all['agents'], $harness => $all[$harness]];
   }
 
   /**

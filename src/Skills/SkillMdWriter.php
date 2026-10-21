@@ -128,7 +128,7 @@ final readonly class SkillMdWriter {
    *   The sentinel file content.
    */
   public static function sentinel(string $skillMd): string {
-    return "Droost-authored skill; safe to delete via `drush droost:uninstall`.\n"
+    return "Droost-authored skill; safe to delete; `droost` removes it on uninstall.\n"
       . 'sha256: ' . hash('sha256', $skillMd) . "\n";
   }
 

@@ -26,6 +26,9 @@ final class Markers {
 
   /**
    * TOML managed-region markers (Codex config.toml).
+   *
+   * droost writes no TOML region now; these find the one an earlier droost
+   * wrote, so it can be removed.
    */
   public const string TOML_BEGIN = '# >>> BEGIN DROOST MCP >>>';
   public const string TOML_END = '# <<< END DROOST MCP <<<';

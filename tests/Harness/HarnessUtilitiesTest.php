@@ -6,7 +6,6 @@ namespace Droost\Engine\Tests\Harness;
 
 use Droost\Engine\Harness\JsonMerge;
 use Droost\Engine\Harness\ManagedRegion;
-use Droost\Engine\Harness\Toml;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -81,16 +80,10 @@ final class HarnessUtilitiesTest extends TestCase {
   }
 
   /**
-   * JsonMerge preserves siblings on set and drops emptied parents on unset.
+   * JsonMerge's unset keeps siblings and drops an emptied parent.
    */
   public function testJsonMerge(): void {
-    $data = ['mcpServers' => ['other' => ['command' => 'x']]];
-    $data = JsonMerge::setPath($data, 'mcpServers', 'droost', ['command' => 'ddev']);
-    $servers = $data['mcpServers'];
-    $this->assertIsArray($servers);
-    $this->assertArrayHasKey('other', $servers);
-    $this->assertArrayHasKey('droost', $servers);
-
+    $data = ['mcpServers' => ['other' => ['command' => 'x'], 'droost' => ['command' => 'ddev']]];
     $data = JsonMerge::unsetPath($data, 'mcpServers', 'droost');
     $kept = $data['mcpServers'];
     $this->assertIsArray($kept);
@@ -98,20 +91,6 @@ final class HarnessUtilitiesTest extends TestCase {
 
     $emptied = JsonMerge::unsetPath(['mcpServers' => ['droost' => []]], 'mcpServers', 'droost');
     $this->assertArrayNotHasKey('mcpServers', $emptied, 'Emptied parent dropped.');
-  }
-
-  /**
-   * Toml emits a valid escaped table and string array.
-   */
-  public function testTomlEmitter(): void {
-    $this->assertSame('"a\\"b"', Toml::string('a"b'), 'Quotes are escaped.');
-    $this->assertSame('"a\\u0001b\\u007Fc\\td"', Toml::string("a\x01b\x7fc\td"), 'Every control character is escaped; TOML forbids them raw.');
-    $args = ['exec', 'php', 'vendor/bin/droost-mcp'];
-    $this->assertSame('["exec", "php", "vendor/bin/droost-mcp"]', Toml::stringArray($args));
-    $table = Toml::mcpServerTable('droost', 'ddev', ['exec', 'php', 'vendor/bin/droost-mcp']);
-    $this->assertStringContainsString('[mcp_servers.droost]', $table);
-    $this->assertStringContainsString('command = "ddev"', $table);
-    $this->assertStringContainsString('args = ["exec", "php", "vendor/bin/droost-mcp"]', $table);
   }
 
 }

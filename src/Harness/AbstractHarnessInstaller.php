@@ -86,46 +86,11 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
   }
 
   /**
-   * Writes droost's MCP server entry, or removes it when there is none.
-   *
-   * @param string $root
-   *   The project root.
-   * @param string $relative
-   *   The JSON config relative path.
-   * @param string $parent
-   *   The parent key (e.g. "mcpServers").
-   * @param \Droost\Engine\Harness\InstallContext $context
-   *   The install context; its server, when set, is written.
-   * @param \Droost\Engine\Harness\InstallResult $result
-   *   The result accumulator.
-   */
-  protected function syncJsonServer(string $root, string $relative, string $parent, InstallContext $context, InstallResult $result): void {
-    if ($context->server === NULL) {
-      $this->removeJsonServer($root, $relative, $parent, $result);
-      return;
-    }
-    if (JsonMerge::isMalformed($root . '/' . $relative)) {
-      $result->addWarning(sprintf('%s is present but not valid JSON; left unchanged to avoid destroying its contents. Fix it and re-run.', $relative));
-      return;
-    }
-    $before = JsonMerge::read($root . '/' . $relative);
-    $data = JsonMerge::mergePath($before, $parent, 'droost', [
-      'command' => $context->server['command'],
-      'args' => $context->server['args'],
-    ]);
-    if (is_file($root . '/' . $relative) && $data == $before) {
-      // Already as droost writes it: leave the file, and its formatting, alone.
-      return;
-    }
-    $this->write($root, $relative, JsonMerge::encode($data));
-    $result->addWritten($relative);
-  }
-
-  /**
    * Removes the droost MCP server entry from a JSON key path.
    *
-   * On uninstall, and on an install with no server (`--no-mcp`). A file left
-   * holding nothing else is deleted.
+   * droost ships no MCP server (2026-10-19), so every install and uninstall
+   * removes the entry an earlier droost wrote. A file left holding nothing
+   * else is deleted.
    *
    * @param string $root
    *   The project root.

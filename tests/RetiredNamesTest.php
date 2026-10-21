@@ -10,8 +10,8 @@ use PHPUnit\Framework\TestCase;
  * No text the engine ships tells an agent to use droost's retired doors.
  *
  * The droost command left Drupal on 2026-10-19: no drush door, no MCP server,
- * no Drupal-era tool ids. The engine writes text agents read (the AGENTS.md
- * directive, skill sentinels) and docblocks people read. This fails on a
+ * no Drupal-era tool ids. The engine writes text agents read (skill
+ * sentinels, the editors' pointers) and docblocks people read. This fails on a
  * retired name in either, and in the README outside its dated changelog,
  * which records each release as it shipped.
  *
@@ -56,7 +56,7 @@ final class RetiredNamesTest extends TestCase {
         $texts[substr($file->getPathname(), strlen($root) + 1)] = implode("\n", $kept);
       }
     }
-    $this->assertArrayHasKey('src/Harness/DroostBlock.php', $texts, 'the directive is read');
+    $this->assertArrayHasKey('src/Harness/ClaudeHarnessInstaller.php', $texts, 'the harness text is read');
 
     $found = [];
     foreach ($texts as $where => $text) {

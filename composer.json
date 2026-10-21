@@ -1,13 +1,11 @@
 {
     "name": "droost/engine",
-    "description": "Framework-free engine behind Droost: QA verify loop, AI-harness installers, skill emitters, scaffold blueprints, OKF wiki core, and code search/graph core for Drupal projects.",
+    "description": "Framework-free engine behind droost: the code index and its SQLite stores, the wiki and search cores, and the AI-harness installers and skill emitters.",
     "type": "library",
     "license": "GPL-2.0-or-later",
     "require": {
         "php": "^8.3",
         "nikic/php-parser": "^5.0",
-        "psr/log": "^2.0 || ^3.0",
-        "symfony/process": "^6.4 || ^7.0",
         "symfony/yaml": "^6.4 || ^7.0 || ^8.0"
     },
     "require-dev": {

@@ -9,42 +9,19 @@ gated run the work goes through. It reads files and needs no Drupal; since
 plain PHP with no Drupal dependency: the code index and its SQLite stores,
 the wiki and search cores, the harness installers that write AGENTS.md and
 each agent's files — used by the `droost` command and by repo-only tooling
-(`bin/droost-index`), and the scaffold blueprints and verify loop the
-retired module used.
+(`bin/droost-index`).
 
 Areas (each depends only on `Support` and `Site`, never on a sibling, except
 `Harness`, whose Claude installer writes `Skills`' files):
 
 | Area | What it holds | Landed |
 | --- | --- | --- |
-| `Support` | Shared primitives: project-root discovery, path guards, secret redaction, git HEAD, clock, state store | partly |
+| `Support` | Shared primitives: path guards, core version, YAML | yes |
 | `Site` | What the engine may know about the site it runs against (its core version), and who owns an extension's code | yes |
-| `Verify` | The QA verify loop (lint, static analysis, tests) and its leg results | yes |
 | `Skills` | Skill emitters: droost's own skill files rendered as SKILL.md | yes |
-| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) | yes |
-| `Scaffold` | Blueprint registry and the framework-free code blueprints | partly — see below |
-| `Wiki` | OKF wiki core: frontmatter, provenance, page composition, bundle reading | yes |
+| `Harness` | Installers that write AI-harness files (AGENTS.md, SKILL.md, and friends) and remove the MCP entry an earlier droost wrote | yes |
+| `Wiki` | OKF wiki core: frontmatter, provenance, file hashing, bundle reading | yes |
 | `Search` | Code search and graph core: chunkers, extractors, index diffing, the SQLite stores droost's code index lives in, and the repo-only indexer (`bin/droost-index`) | yes |
-
-## Why `Scaffold` is a partial lift
-
-The scaffold area splits along a line that is not negotiable. Droost composes
-Drush's ~70 code generators rather than reinventing them, and that runner needs
-the **Drush runtime container** — `Drush::hasContainer()`, and Drush's own
-`ApplicationFactory`. Seven blueprints (service, content-entity, config-entity,
-event-subscriber, block, form, plugin) are built on it, and an eighth reflects
-over `DrushCommands` to compute its reserved method list. None of those can
-live in a package that does not depend on Drush, so they stayed in the
-module, and went with it when droost left Drupal (2026-10-19).
-
-What lives here is the spine — `BlueprintInterface`, `AbstractBlueprint`,
-`BlueprintRegistry`, `ScaffoldContext`, `ScaffoldResult` — plus the thirteen
-blueprints that emit from templates rather than delegating: access-handler,
-ckeditor5-plugin, config-schema, functional-test, hook, kernel-test,
-media-source, migrate, plugin-deriver, recipe, route-subscriber, sdc and
-views-handler. The registry accepted both halves, so the module's consumers
-saw one set. The `droost` command scaffolds nothing: today no consumer
-registers either half, and the same is true of the `Verify` loop.
 
 ## The `Site` port
 
@@ -76,7 +53,8 @@ files for Claude, Codex, Gemini, opencode and Qwen. The minor bumps because
 consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
 
 **0.3.0** adds the scaffold spine and the eight template-only blueprints (B3),
-for the reasons in "Why `Scaffold` is a partial lift" above.
+(the Drush-backed half stayed in the module; this half left on 2026-10-21,
+see Unreleased).
 
 **0.4.0** adds the OKF wiki core (B4) — frontmatter parsing, provenance,
 page composition, bundle reading — plus `Support\Yaml`, which reproduces
@@ -154,11 +132,20 @@ Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
 **Unreleased**:
-- droost leaves Drupal (2026-10-19): `DroostBlock`'s directive names the
-  `droost` command's knowledge commands (`code:wiki`, `code:tree`,
-  `search:arch`, …) instead of drush and MCP, the same words as
-  `droost/workflow`'s `HarnessSetup`, which writes it. The harnesses' MCP
-  entry support stays, so an install can remove an old droost server entry.
+- The retired module's code is gone (2026-10-21; its runs on the owner's
+  sites were tests, so nothing reads its shape): the `Scaffold` area and
+  its thirteen blueprints, the `Verify` loop (and the `symfony/process` and
+  `psr/log` requirements), `HarnessRegistry`, `DroostBlock` (droost/workflow's
+  `HarnessSetup` writes the block), `CommandProvider`, the wiki's
+  `PageComposer`, `PageRenderer`, `GenerationRow` and `ComposeException`, and
+  `Support\GitHead`, `SecretRedactor` and `ProjectRoot`.
+- The harnesses write no MCP server: `InstallContext` carries the block body
+  only, and every install removes the entry an earlier droost wrote, as
+  uninstall does. `Toml`, `JsonMerge::setPath()` and `mergePath()` are gone;
+  `Markers::TOML_*` stay, to find Codex's old region.
+- droost leaves Drupal (2026-10-19): the directive names the `droost`
+  command's knowledge commands (`code:wiki`, `code:tree`, `search:arch`, …)
+  instead of drush and MCP.
 - A call on `$this` (or `$this?->`), `self::` or `static::` is a `calls` edge
   to the method it names, so a protected helper called only through `$this`
   no longer reads as having no callers (F-322). A call on any other object
@@ -258,8 +245,6 @@ It also has two fixes:
 - The kernel-test and functional-test blueprints keep a class name that
   already ends in `Test`.
 
-The rest of `Support` (clock, state store) arrives with the areas that need it.
-
 ## Install
 
 ```
@@ -280,8 +265,7 @@ vendor/bin/phpunit
 ```
 
 Coding standards are Drupal + DrupalPractice (`phpcs.xml.dist`), the same as
-`droost/workflow`'s, so code lifted from the retired module diffs to
-near-zero. PHPStan runs at level max with an empty baseline; the tree
+`droost/workflow`'s. PHPStan runs at level max with an empty baseline; the tree
 outgrew its 128M default memory. CI runs `composer validate --strict` and
 these three on PHP 8.3 and 8.4.
 

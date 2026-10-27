@@ -88,9 +88,9 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
   /**
    * Removes the droost MCP server entry from a JSON key path.
    *
-   * droost ships no MCP server (2026-10-19), so every install and uninstall
-   * removes the entry an earlier droost wrote. A file left holding nothing
-   * else is deleted.
+   * The droost CLI ships no MCP server (2026-10-19), so every install
+   * and uninstall removes the entry an earlier droost wrote. A file left
+   * holding nothing else is deleted.
    *
    * @param string $root
    *   The project root.

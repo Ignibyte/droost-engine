@@ -33,12 +33,13 @@ which means "cannot tell", never a guess.
 
 ## Status
 
-**0.x.** The code was lifted out of the droost Drupal module area by area
-(phases B1 through B5 of the extraction plan); the module is now retired, and
-the consumer is `droost/workflow`'s `droost` command. Treat the API as
-unstable until 1.0: breaking changes bump the minor, and consumers should pin
-per minor (`~0.1.0`). The entries below are the record as each release
-shipped.
+**1.0.0** (2026-10-27), released with droost/workflow 1.0.0. The code was
+lifted out of the droost Drupal module area by area (phases B1 through B5 of
+the extraction plan); the module is now retired, and the consumer is
+`droost/workflow`'s `droost` command. From 1.0 the API follows semantic
+versioning: a breaking change bumps the major, and consumers require `^1.0`.
+Before 1.0 a breaking change bumped the minor. The entries below are the
+record as each release shipped.
 
 **0.1.1** landed the pilot tranche — `Support\ProjectRoot`, `Support\PathGuard`,
 `Support\SecretRedactor`, `Support\GitHead`, `Verify\VerifyRunner`,
@@ -54,7 +55,7 @@ consumers pinned to `~0.1.0` must opt in; nothing in 0.1.1 changed.
 
 **0.3.0** adds the scaffold spine and the eight template-only blueprints (B3),
 (the Drush-backed half stayed in the module; this half left on 2026-10-21,
-see Unreleased).
+see 1.0.0).
 
 **0.4.0** adds the OKF wiki core (B4) — frontmatter parsing, provenance,
 page composition, bundle reading — plus `Support\Yaml`, which reproduces
@@ -131,7 +132,7 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
-**Unreleased**:
+**1.0.0**:
 - The retired module's code is gone (2026-10-21; its runs on the owner's
   sites were tests, so nothing reads its shape): the `Scaffold` area and
   its thirteen blueprints, the `Verify` loop (and the `symfony/process` and

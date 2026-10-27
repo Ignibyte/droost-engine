@@ -41,7 +41,8 @@ final class RetiredNamesTest extends TestCase {
     $root = dirname(__DIR__);
     $texts = [];
     $readme = (string) file_get_contents($root . '/README.md');
-    $cut = strpos($readme, "\n**Unreleased**");
+    // The record starts at the newest entry: **Unreleased**: or **1.0.0**:.
+    $cut = preg_match('/\n\*\*(Unreleased|\d+\.\d+\.\d+)\*\*:/', $readme, $m, PREG_OFFSET_CAPTURE) === 1 ? $m[0][1] : FALSE;
     $texts['README.md (before the changelog)'] = $cut === FALSE ? $readme : substr($readme, 0, $cut);
     $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS));
     foreach ($iterator as $file) {

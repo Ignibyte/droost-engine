@@ -225,6 +225,29 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * A pointer file that IS AGENTS.md is not pointed at itself (F-500).
+   *
+   * A project may keep one file and link the others to it: `CLAUDE.md ->
+   * AGENTS.md`. The pointer writer then upserted its import into the same
+   * file, under the same markers, over the block just written there: the
+   * project's whole droost block became "@AGENTS.md", in AGENTS.md.
+   */
+  public function testPointerFileLinkedToAgentsIsLeftAsItIs(): void {
+    file_put_contents($this->root . '/AGENTS.md', "My own notes.\n");
+    foreach (['CLAUDE.md', 'GEMINI.md', 'QWEN.md'] as $file) {
+      symlink('AGENTS.md', $this->root . '/' . $file);
+    }
+
+    $this->install('all');
+
+    $agents = (string) file_get_contents($this->root . '/AGENTS.md');
+    $this->assertStringContainsString('## Use droost first', $agents, 'the block is still the block');
+    $this->assertStringNotContainsString('@AGENTS.md', $agents, 'and not an import of itself');
+    $this->assertStringNotContainsString('`./AGENTS.md`', $agents);
+    $this->assertTrue(is_link($this->root . '/CLAUDE.md'), 'the link is still a link');
+  }
+
+  /**
    * A retired skill droost wrote and nobody touched is removed.
    *
    * This is the case every existing site is in: a sentinel written before

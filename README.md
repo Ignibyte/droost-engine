@@ -132,6 +132,12 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**1.0.1**:
+- A pointer file that is AGENTS.md is left as it is (F-500). With `CLAUDE.md`,
+  `GEMINI.md` or `QWEN.md` linked to `AGENTS.md`, the pointer was written into
+  the same file under the same markers, over the block just written there,
+  and the project's droost block became an import of itself.
+
 **1.0.0**:
 - The retired module's code is gone (2026-10-21; its runs on the owner's
   sites were tests, so nothing reads its shape): the `Scaffold` area and

@@ -153,6 +153,17 @@ abstract class AbstractHarnessInstaller implements HarnessInstallerInterface {
    *   The result accumulator.
    */
   protected function upsertMarkdown(string $root, string $relative, string $body, InstallResult $result): void {
+    // A POINTER FILE THAT IS AGENTS.md. A project may keep one file and link
+    // the others to it (`CLAUDE.md -> AGENTS.md`). The pointer then went
+    // into the same file, under the same markers, over the block the agents
+    // installer had just written: the project's droost block became an
+    // import of itself. The file already says everything a pointer would.
+    if ($relative !== 'AGENTS.md') {
+      $here = realpath($root . '/' . $relative);
+      if ($here !== FALSE && $here === realpath($root . '/AGENTS.md')) {
+        return;
+      }
+    }
     $existing = $this->read($root, $relative);
     try {
       $new = ManagedRegion::upsert($existing, Markers::MD_BEGIN, Markers::MD_END, $body);

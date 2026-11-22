@@ -132,6 +132,31 @@ nothing, so a module's own CI checkout does not make every extension contrib.
 Paths are compared as written, never resolved, so a package composer linked
 in from elsewhere is still found at its link.
 
+**1.1.0**:
+- `Site\ScopeClassifier::forSite()` reads the site's own
+  `vendor/composer/installed.json`, as data. `forAppRoot()` asks the composer
+  that loaded the engine, which for a command installed in its own vendor
+  directory describes the command, so everything a site installed outside a
+  `contrib` folder read as custom (F-501). And a package composer calls
+  contrib is the project's when it sits under a `custom` folder, as a module
+  developed in a path repository does.
+- The index (`RepoIndexer::INDEXER_VERSION` is 5, so an existing one
+  rebuilds): a file is re-parsed when the extension it belongs to changes,
+  not only its content, and a run redone after it was killed adds nothing
+  twice (F-502). A hook an `.api.php` documents is a `hook:NAME` symbol, as
+  version 3 meant and the indexer never did (F-498). `sites/*/files` and
+  `sites/*/private` are not source, and `RepoSourceDiscovery` takes more
+  directories to leave out (F-499).
+- The wiki: a managed page behind a byte-order mark or a blank first line is
+  still managed, a fence that opens around a `droost:` block and never
+  closes is invalid, and the display and search cap is on a page's body, not
+  on the file, so long frontmatter no longer hides it (F-503).
+- `Support\PathGuard::isWithin()` answers FALSE for an empty base. Uninstalling
+  opencode keeps `./AGENTS.md` in its instructions while AGENTS.md still
+  holds text of the project's own (F-504).
+- `SqliteCodeGraphStorage::SYMBOLS` and `EDGES` and `SqliteFileManifest::TABLE`
+  are public, and `ext-mbstring` is required: it always was needed (F-505).
+
 **1.0.1**:
 - A pointer file that is AGENTS.md is left as it is (F-500). With `CLAUDE.md`,
   `GEMINI.md` or `QWEN.md` linked to `AGENTS.md`, the pointer was written into

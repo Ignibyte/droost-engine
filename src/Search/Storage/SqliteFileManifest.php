@@ -23,7 +23,7 @@ final class SqliteFileManifest implements FileManifestInterface {
   /**
    * The manifest table name.
    */
-  private const string TABLE = 'droost_search_file';
+  public const string TABLE = 'droost_search_file';
 
   /**
    * Constructs a SqliteFileManifest.

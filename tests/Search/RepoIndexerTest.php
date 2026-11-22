@@ -224,6 +224,30 @@ final class RepoIndexerTest extends TestCase {
   }
 
   /**
+   * A site's files directory is not source (F-499).
+   *
+   * Compiled Twig lives under `sites/<site>/files/php`, thousands of
+   * generated classes that changed with every cache clear, and all of it
+   * went into search and the graph. A directory the caller names is left
+   * out the same way.
+   */
+  public function testFilesDirectoryAndNamedDirectoriesAreNotIndexed(): void {
+    mkdir($this->root . '/sites/default/files/php/twig', 0777, TRUE);
+    file_put_contents($this->root . '/sites/default/files/php/twig/x.php', "<?php\n\nclass __TwigTemplate_abc {}\n");
+    mkdir($this->root . '/sites/default/modules', 0777, TRUE);
+    file_put_contents($this->root . '/sites/default/modules/Kept.php', "<?php\n\nclass KeptInSites {}\n");
+    mkdir($this->root . '/build/out', 0777, TRUE);
+    file_put_contents($this->root . '/build/out/Gen.php', "<?php\n\nclass GeneratedThing {}\n");
+
+    $paths = array_column((new RepoSourceDiscovery($this->root, FALSE, ['build/*']))->files(), 'path');
+
+    $this->assertNotContains('sites/default/files/php/twig/x.php', $paths);
+    $this->assertNotContains('build/out/Gen.php', $paths);
+    $this->assertContains('sites/default/modules/Kept.php', $paths, 'code under sites/ is still code');
+    $this->assertContains('modules/my_module/src/Greeter.php', $paths);
+  }
+
+  /**
    * The vendor directory is never indexed.
    */
   public function testSkipsVendor(): void {

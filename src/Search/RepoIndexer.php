@@ -39,9 +39,11 @@ final class RepoIndexer {
    * v3: a hook an api.php documents is a `hook:NAME` symbol, so an
    * implementation's edge reaches the module that owns the hook (B3).
    * v4: a call on `$this`, `self::` or `static::` is a `calls` edge to the
-   * method it names, so a protected helper's callers are found.
+   * method it names, so a protected helper's callers are found. v5: what
+   * decides a re-parse is the file's extension with its content (F-502),
+   * so every stored hash is of another thing and the index is rebuilt.
    */
-  public const int INDEXER_VERSION = 4;
+  public const int INDEXER_VERSION = 5;
 
   /**
    * Constructs a RepoIndexer.
@@ -97,7 +99,11 @@ final class RepoIndexer {
         continue;
       }
       $byPath[$file['path']] = $file;
-      $hashes[$file['path']] = hash('xxh3', $content);
+      // The extension the file belongs to is part of what was indexed, and
+      // it is not in the file: a class indexed before its module had an
+      // info file kept module `` until a full rebuild, because its content
+      // never changed (F-502).
+      $hashes[$file['path']] = hash('xxh3', $file['module'] . "\0" . $content);
     }
 
     $delta = $isFull
@@ -136,7 +142,15 @@ final class RepoIndexer {
       $this->graph->rebuild(array_values($symbols), array_values($edges));
     }
     else {
-      $this->graph->applyDelta($delta->toDrop(), array_values($symbols), array_values($edges));
+      // EVERY re-parsed path is dropped first, the added ones too. A run
+      // killed between this and the manifest below is redone, and the redo
+      // sees its new files as new again: their rows were added twice
+      // (F-502). Dropping a path that has no rows costs nothing.
+      $this->graph->applyDelta(
+        array_values(array_unique(array_merge($delta->toDrop(), $delta->toParse()))),
+        array_values($symbols),
+        array_values($edges),
+      );
     }
 
     // The manifest is written LAST, so an interrupted run simply redoes those

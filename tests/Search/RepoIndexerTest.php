@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Droost\Engine\Tests\Search;
 
+use Droost\Engine\Search\FileManifestInterface;
 use Droost\Engine\Search\Graph\PhpGraphExtractor;
 use Droost\Engine\Search\Graph\SqliteCodeGraphStorage;
 use Droost\Engine\Search\Graph\YamlGraphExtractor;
@@ -114,6 +115,91 @@ final class RepoIndexerTest extends TestCase {
     $symbols = $this->graph->findSymbols('Greeter', 10);
     $this->assertNotSame([], $symbols);
     $this->assertSame('my_module', $symbols[0]['module']);
+  }
+
+  /**
+   * A file whose extension appears later is given to it (F-502).
+   *
+   * What decides a re-parse was the file's content alone, and the extension
+   * a file belongs to is not in its content: a class indexed before its
+   * module had an info file kept module `` until a full rebuild.
+   */
+  public function testFileIsGivenToAnExtensionThatAppearsLater(): void {
+    mkdir($this->root . '/modules/late/src', 0777, TRUE);
+    file_put_contents($this->root . '/modules/late/src/Thing.php', "<?php\n\nnamespace Drupal\\late;\n\nclass Thing {}\n");
+    $this->indexer()->index();
+    $this->assertSame('', $this->graph->findSymbols('Thing', 10)[0]['module']);
+
+    file_put_contents($this->root . '/modules/late/late.info.yml', "name: Late\ntype: module\n");
+    $report = $this->indexer()->index();
+
+    $this->assertSame('incremental', $report['mode']);
+    $things = $this->graph->findSymbols('Thing', 10);
+    $this->assertCount(1, $things);
+    $this->assertSame('late', $things[0]['module']);
+  }
+
+  /**
+   * A run that died before its manifest was written leaves no doubles.
+   *
+   * The graph is written first and the manifest last, so a run killed in
+   * between is redone. The redo saw its new files as new again and added
+   * their rows a second time: only changed and removed files were dropped
+   * first (F-502).
+   */
+  public function testRedoAfterInterruptedRunAddsNothingTwice(): void {
+    $this->indexer()->index();
+    file_put_contents($this->root . '/modules/my_module/src/Added.php', "<?php\n\nnamespace Drupal\\my_module;\n\nclass Added {}\n");
+
+    $dying = new class($this->manifest) implements FileManifestInterface {
+
+      /**
+       * Constructs the manifest that dies.
+       *
+       * @param \Droost\Engine\Search\FileManifestInterface $inner
+       *   The real one.
+       */
+      public function __construct(private readonly FileManifestInterface $inner) {}
+
+      /**
+       * {@inheritdoc}
+       */
+      public function ensureSchema(): void {
+        $this->inner->ensureSchema();
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function all(): array {
+        return $this->inner->all();
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function apply(array $upserts, array $removals, int $timestamp): void {
+        throw new \RuntimeException('killed before the manifest was written');
+      }
+
+      /**
+       * {@inheritdoc}
+       */
+      public function replaceAll(array $rows, int $timestamp): void {
+        $this->inner->replaceAll($rows, $timestamp);
+      }
+
+    };
+    try {
+      (new RepoIndexer(new RepoSourceDiscovery($this->root), new PhpGraphExtractor(), new YamlGraphExtractor(), $dying, $this->graph, $this->root))->index();
+      $this->fail('the run was meant to die');
+    }
+    catch (\RuntimeException) {
+      // The graph holds the new file's rows; the manifest does not know it.
+    }
+    $this->indexer()->index();
+
+    $this->assertCount(1, $this->graph->findSymbols('Added', 10), 'the redo replaced the rows; it did not add them again');
   }
 
   /**

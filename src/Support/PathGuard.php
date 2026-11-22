@@ -25,6 +25,11 @@ final class PathGuard {
    *   TRUE if $path is contained within $base.
    */
   public static function isWithin(string $base, string $path): bool {
+    // An empty base holds nothing. Its trailing slash trimmed, it became
+    // "/", which every absolute path starts with (F-504).
+    if ($base === '') {
+      return FALSE;
+    }
     return $path === $base || str_starts_with($path, rtrim($base, '/') . '/');
   }
 

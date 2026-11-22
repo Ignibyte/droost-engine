@@ -45,11 +45,52 @@ final class RepoSourceDiscovery {
    *   Whether to descend into "tests" directories. Off by default, matching
    *   the Drupal discovery — test fixtures inflate a graph with classes
    *   nothing ships.
+   * @param list<string> $exclude
+   *   More directories to leave out, relative to the root, a `*` standing
+   *   for one directory name (`build`, `web/libraries/*`). Added to
+   *   NEVER_SOURCE.
    */
   public function __construct(
     private readonly string $root,
     private readonly bool $includeTests = FALSE,
+    private readonly array $exclude = [],
   ) {}
+
+  /**
+   * Directories that are never source, as patterns relative to the root.
+   *
+   * A site's public and private files: compiled Twig lives under
+   * `sites/<site>/files/php`, thousands of generated classes that change
+   * with every cache clear (F-499).
+   */
+  public const array NEVER_SOURCE = ['sites/*/files', 'sites/*/private'];
+
+  /**
+   * Whether a directory is left out, by a built-in or a caller's pattern.
+   *
+   * @param string $relative
+   *   The directory, relative to the root.
+   *
+   * @return bool
+   *   TRUE when nothing under it is indexed.
+   */
+  private function isExcluded(string $relative): bool {
+    foreach ([...self::NEVER_SOURCE, ...$this->exclude] as $pattern) {
+      $pattern = trim($pattern, '/');
+      if ($pattern === '') {
+        continue;
+      }
+      // A pattern names a directory, and everything under it goes with it
+      // (a trailing `/*` says the same). A star elsewhere stands for one
+      // directory name.
+      $directory = (string) preg_replace('#/\*$#', '', $pattern);
+      if (preg_match('#^' . str_replace('\\*', '[^/]+', preg_quote($directory, '#')) . '$#', $relative) === 1) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
+  }
 
   /**
    * Returns the indexable files under the root.
@@ -70,7 +111,8 @@ final class RepoSourceDiscovery {
     $iterator = new \RecursiveIteratorIterator(
       new \RecursiveCallbackFilterIterator(
         new \RecursiveDirectoryIterator($this->root, \FilesystemIterator::SKIP_DOTS),
-        static fn (\SplFileInfo $f): bool => !$f->isDir() || !in_array($f->getFilename(), $skip, TRUE),
+        fn (\SplFileInfo $f): bool => !$f->isDir()
+          || (!in_array($f->getFilename(), $skip, TRUE) && !$this->isExcluded(ltrim(substr($f->getPathname(), strlen($this->root)), '/'))),
       ),
     );
 

@@ -201,6 +201,61 @@ final class ScopeClassifierTest extends TestCase {
   }
 
   /**
+   * A site's classifier reads the SITE's composer record (F-501).
+   *
+   * The other entry, forAppRoot(), asks the composer that loaded this code,
+   * and droost is installed in a vendor directory of its own
+   * (`tools/droost/vendor`), so that record describes the tool. Every
+   * package the site installed outside a `contrib` folder then read as
+   * custom. The site's own `vendor/composer/installed.json` is read, as
+   * data.
+   */
+  public function testForSiteReadsTheSitesOwnRecord(): void {
+    $project = sys_get_temp_dir() . '/droost-scope-' . bin2hex(random_bytes(6));
+    mkdir($project . '/vendor/composer', 0777, TRUE);
+    mkdir($project . '/web', 0777, TRUE);
+    file_put_contents($project . '/vendor/composer/installed.json', (string) json_encode([
+      'packages' => [
+        ['name' => 'drupal/core', 'type' => 'drupal-core', 'install-path' => '../../web/core'],
+        ['name' => 'drupal/webform', 'type' => 'drupal-module', 'install-path' => '../../web/modules/webform'],
+        ['name' => 'symfony/yaml', 'type' => 'library', 'install-path' => '../symfony/yaml'],
+      ],
+    ]));
+
+    $site = ScopeClassifier::forSite($project . '/web', $project);
+    $this->assertSame(Provenance::Contrib, $site->classify('modules/webform'), 'the site installed it');
+    $this->assertSame(Provenance::Custom, $site->classify('modules/mine'), 'placed by hand');
+
+    // A vendor directory the project names is the one read.
+    rename($project . '/vendor', $project . '/libs');
+    file_put_contents($project . '/composer.json', (string) json_encode(['config' => ['vendor-dir' => 'libs']]));
+    $this->assertSame(Provenance::Contrib, ScopeClassifier::forSite($project . '/web', $project)->classify('modules/webform'));
+
+    // With no record, the paths alone decide, and say when they cannot.
+    $bare = ScopeClassifier::forSite($project . '/web', $project . '/web');
+    $this->assertSame(Provenance::Unknown, $bare->classify('modules/webform'));
+    exec('rm -rf ' . escapeshellarg($project));
+  }
+
+  /**
+   * Code under `custom` is the project's, whatever type composer gave it.
+   *
+   * A module developed in a path repository is a `drupal-module` to
+   * composer and sits in `modules/custom`, linked in. It read as contrib,
+   * so the project's own code was held to the contrib bar (F-501).
+   */
+  public function testPathRepositoryModuleUnderCustomIsCustom(): void {
+    $site = self::site([
+      'acme/mine' => ['drupal-module', '/app/vendor/composer/../../web/modules/custom/mine'],
+      'drupal/webform' => ['drupal-module', '/app/vendor/composer/../../web/modules/contrib/webform'],
+    ]);
+
+    $this->assertSame(Provenance::Custom, $site->classify('modules/custom/mine'));
+    $this->assertSame(Provenance::Custom, $site->classify('modules/custom/mine/modules/sub'));
+    $this->assertSame(Provenance::Contrib, $site->classify('modules/contrib/webform'));
+  }
+
+  /**
    * The running site's classifier reads composer's runtime record.
    *
    * This repository's own vendor directory holds no Drupal package below

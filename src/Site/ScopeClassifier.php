@@ -67,6 +67,53 @@ final readonly class ScopeClassifier {
   }
 
   /**
+   * The classifier for a site read from its files, by its own composer.
+   *
+   * Where forAppRoot() asks the composer that loaded this code. A command
+   * installed in a vendor directory of its own (`tools/droost/vendor`) is
+   * then told about the tool's packages, not the site's, and everything the
+   * site installed outside a `contrib` folder reads as custom. This reads
+   * the site's `vendor/composer/installed.json`, as data: nothing of the
+   * project is executed.
+   *
+   * @param string $appRoot
+   *   The absolute app root (the docroot).
+   * @param string $projectRoot
+   *   The absolute project root, where composer.json and vendor/ are.
+   *
+   * @return self
+   *   The classifier; one with no composer record when none can be read.
+   */
+  public static function forSite(string $appRoot, string $projectRoot): self {
+    $project = rtrim($projectRoot, '/');
+    $vendor = 'vendor';
+    $manifest = is_file($project . '/composer.json') ? json_decode((string) file_get_contents($project . '/composer.json'), TRUE) : NULL;
+    if (is_array($manifest) && is_array($manifest['config'] ?? NULL) && is_string($manifest['config']['vendor-dir'] ?? NULL) && $manifest['config']['vendor-dir'] !== '') {
+      $vendor = trim($manifest['config']['vendor-dir'], '/');
+    }
+    $composer = $project . '/' . $vendor . '/composer';
+    $installed = is_file($composer . '/installed.json') ? json_decode((string) file_get_contents($composer . '/installed.json'), TRUE) : NULL;
+    $packages = is_array($installed) ? ($installed['packages'] ?? NULL) : NULL;
+    if (!is_array($packages)) {
+      return self::withoutComposer();
+    }
+    $versions = [];
+    foreach ($packages as $package) {
+      // Composer 2 records where each package went; a record without it
+      // cannot say who owns a directory.
+      if (!is_array($package) || !is_string($package['name'] ?? NULL) || !is_string($package['install-path'] ?? NULL)) {
+        continue;
+      }
+      $versions[$package['name']] = [
+        'type' => $package['type'] ?? NULL,
+        'install_path' => $composer . '/' . $package['install-path'],
+      ];
+    }
+
+    return $versions === [] ? self::withoutComposer() : self::fromInstalledData($appRoot, [['versions' => $versions]]);
+  }
+
+  /**
    * A classifier built from InstalledVersions::getAllRawData()'s shape.
    *
    * @param string $appRoot
@@ -129,7 +176,11 @@ final readonly class ScopeClassifier {
     if ($this->owners !== NULL) {
       for ($dir = $path; $dir !== '' && $dir !== '.'; $dir = self::parent($dir)) {
         if (isset($this->owners[$dir])) {
-          return self::fromType($this->owners[$dir]);
+          $owner = self::fromType($this->owners[$dir]);
+          // A module developed in a path repository is a plain
+          // `drupal-module` to composer, linked into `modules/custom`. The
+          // folder says whose it is: under `custom` it is the project's.
+          return $owner === Provenance::Contrib && in_array('custom', explode('/', $path), TRUE) ? Provenance::Custom : $owner;
         }
       }
     }

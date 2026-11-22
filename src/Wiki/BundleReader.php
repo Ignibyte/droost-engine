@@ -141,7 +141,7 @@ final readonly class BundleReader {
     if ($resolved === NULL) {
       return NULL;
     }
-    $raw = $this->readCapped($resolved, self::MAX_FILE_BYTES);
+    $raw = $this->readPage($resolved);
     if ($raw === NULL) {
       return NULL;
     }
@@ -203,7 +203,7 @@ final readonly class BundleReader {
       if ($resolved === NULL) {
         continue;
       }
-      $raw = $this->readCapped($resolved, self::MAX_FILE_BYTES);
+      $raw = $this->readPage($resolved);
       if ($raw === NULL) {
         continue;
       }
@@ -252,6 +252,34 @@ final readonly class BundleReader {
       return NULL;
     }
     return PathGuard::resolve($this->settings->bundlePath(), $file);
+  }
+
+  /**
+   * Reads a page for display or search: its frontmatter, and a capped body.
+   *
+   * The cap is on the body. A page's sources are listed in its frontmatter,
+   * one entry each, and the first 16,000 bytes of a page over a large module
+   * are all frontmatter: read by the file, the fence never closed, the page
+   * had no title and its body could not be found (F-503).
+   *
+   * @param string $path
+   *   The absolute file path.
+   *
+   * @return string|null
+   *   The frontmatter whole and the body up to the display cap, or NULL
+   *   when unreadable.
+   */
+  private function readPage(string $path): ?string {
+    $content = @file_get_contents($path, FALSE, NULL, 0, self::MAX_META_BYTES + self::MAX_FILE_BYTES + 1);
+    if ($content === FALSE) {
+      return NULL;
+    }
+    $fence = '/^(?:\xEF\xBB\xBF)?(?:[ \t]*\R)*---\R.*?\R---(?:\R|$)/s';
+    $cap = (preg_match($fence, $content, $m) === 1 ? strlen($m[0]) : 0) + self::MAX_FILE_BYTES;
+    if (strlen($content) > $cap) {
+      $content = mb_strcut($content, 0, $cap) . "\n…(truncated)";
+    }
+    return $content;
   }
 
   /**

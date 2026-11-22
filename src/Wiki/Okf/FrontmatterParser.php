@@ -28,7 +28,18 @@ final readonly class FrontmatterParser {
    *   The parse verdict.
    */
   public function parse(string $raw): PageMeta {
-    if (preg_match('/^---\R(.*?)\R---(?:\R(.*))?$/s', $raw, $m) !== 1) {
+    // A byte-order mark and blank lines before the fence are an editor's,
+    // not the page's (F-503). The fence had to be the file's first bytes,
+    // so a managed page saved with either parsed as hand-written and never
+    // went stale.
+    $page = (string) preg_replace('/^(?:\xEF\xBB\xBF)?(?:[ \t]*\R)*/', '', $raw, 1);
+    if (preg_match('/^---\R(.*?)\R---(?:\R(.*))?$/s', $page, $m) !== 1) {
+      // A fence that opens and never closes, around a droost block: the
+      // page claims provenance and cannot be read, so it fails closed, as
+      // one whose YAML will not parse does below.
+      if (preg_match('/^---\R/', $page) === 1 && preg_match('/^droost\s*:/m', $page) === 1) {
+        return PageMeta::invalid('frontmatter opens with --- and is never closed', $raw);
+      }
       return PageMeta::unmanaged($raw);
     }
     $frontmatter = $m[1];

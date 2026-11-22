@@ -5,6 +5,7 @@
     "license": "GPL-2.0-or-later",
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "nikic/php-parser": "^5.0",
         "symfony/yaml": "^6.4 || ^7.0 || ^8.0"
     },

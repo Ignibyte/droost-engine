@@ -21,13 +21,17 @@ final class SqliteCodeGraphStorage implements CodeGraphStorageInterface {
 
   /**
    * The symbols table name.
+   *
+   * Public from 1.1, with EDGES and SqliteFileManifest::TABLE: a reader of
+   * the index names a table by these, where droost/workflow kept copies of
+   * the strings that `^1.0` never promised (F-505).
    */
-  private const string SYMBOLS = 'droost_search_symbol';
+  public const string SYMBOLS = 'droost_search_symbol';
 
   /**
    * The edges table name.
    */
-  private const string EDGES = 'droost_search_edge';
+  public const string EDGES = 'droost_search_edge';
 
   /**
    * The LIKE escape character, as a SQL literal.

@@ -248,6 +248,38 @@ final class HarnessInstallTest extends TestCase {
   }
 
   /**
+   * An opencode instruction the project still needs is not taken away (F-504).
+   *
+   * `./AGENTS.md` is the line droost adds, and it is the line a person
+   * writes to point opencode at their own AGENTS.md. Uninstall removed it
+   * either way. While AGENTS.md is still there with text of the project's
+   * own, the instruction still points at something, whoever wrote it.
+   */
+  public function testUninstallKeepsPointerAtProjectsOwnAgentsFile(): void {
+    file_put_contents($this->root . '/AGENTS.md', "My own notes.\n");
+    $theirs = ['instructions' => ['./AGENTS.md', './docs/style.md']];
+    file_put_contents($this->root . '/opencode.json', (string) json_encode($theirs));
+
+    $this->install('all');
+    $this->uninstall();
+
+    $opencode = json_decode((string) file_get_contents($this->root . '/opencode.json'), TRUE);
+    $this->assertIsArray($opencode);
+    $this->assertSame(['./AGENTS.md', './docs/style.md'], $opencode['instructions']);
+    $this->assertStringContainsString('My own notes.', (string) file_get_contents($this->root . '/AGENTS.md'));
+  }
+
+  /**
+   * With nothing of the project's in AGENTS.md, the pointer goes with it.
+   */
+  public function testUninstallRemovesPointerWhenAgentsFileWasOnlyDroosts(): void {
+    $this->install('all');
+    $this->uninstall();
+
+    $this->assertFileDoesNotExist($this->root . '/opencode.json');
+  }
+
+  /**
    * A retired skill droost wrote and nobody touched is removed.
    *
    * This is the case every existing site is in: a sentinel written before

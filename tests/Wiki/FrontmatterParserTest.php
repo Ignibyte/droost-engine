@@ -65,6 +65,44 @@ final class FrontmatterParserTest extends TestCase {
   }
 
   /**
+   * A byte-order mark or a blank line before the fence hides nothing (F-503).
+   *
+   * The fence had to be the file's first bytes, so a managed page saved by
+   * an editor that writes a BOM, or with a blank first line, parsed as
+   * hand-written: it never went stale, whatever its sources did.
+   */
+  public function testManagedPageBehindBomOrBlankLineIsStillManaged(): void {
+    $page = "---\ntitle: \"alpha\"\ndroost:\n  spec: 1\n  modules: [alpha]\n  sources:\n"
+      . "    - path: a/alpha.module\n      hash: \"xxh3:9f86d081884c7d65\"\n---\n\n# alpha\n";
+    $saved = [
+      'a byte-order mark' => "\xEF\xBB\xBF" . $page,
+      'a blank line' => "\n" . $page,
+      'both' => "\xEF\xBB\xBF\r\n\n" . $page,
+    ];
+    foreach ($saved as $what => $raw) {
+      $meta = $this->parser->parse($raw);
+      $this->assertTrue($meta->isManaged(), $what);
+      $this->assertSame('alpha', $meta->title, $what);
+      $this->assertSame('# alpha', trim($meta->body), $what);
+    }
+  }
+
+  /**
+   * A droost block in a fence that never closes is invalid, not unmanaged.
+   *
+   * A page that claims provenance and cannot be read fails closed, as one
+   * whose YAML will not parse already does.
+   */
+  public function testUnclosedFenceClaimingDroostIsInvalid(): void {
+    $meta = $this->parser->parse("---\ntitle: alpha\ndroost:\n  spec: 1\n\n# alpha\n");
+    $this->assertTrue($meta->isInvalid());
+
+    $plain = $this->parser->parse("---\n\nA page that opens with a rule.\n");
+    $this->assertFalse($plain->isInvalid());
+    $this->assertFalse($plain->isManaged());
+  }
+
+  /**
    * A page without frontmatter is unmanaged.
    */
   public function testNoFrontmatterIsUnmanaged(): void {

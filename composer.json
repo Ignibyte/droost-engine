@@ -7,7 +7,7 @@
         "php": "^8.3",
         "ext-mbstring": "*",
         "nikic/php-parser": "^5.0",
-        "symfony/yaml": "^6.4 || ^7.0 || ^8.0"
+        "symfony/yaml": "^6.4.50 || ^7.4.23 || ^8.1.11"
     },
     "require-dev": {
         "dealerdirect/phpcodesniffer-composer-installer": "^1.0",

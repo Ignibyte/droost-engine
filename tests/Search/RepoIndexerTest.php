@@ -203,6 +203,27 @@ final class RepoIndexerTest extends TestCase {
   }
 
   /**
+   * A hook an api.php documents is a symbol in the index (F-498).
+   *
+   * The extractor declares `hook:NAME` for a function in an `.api.php`
+   * (indexer v3), and the indexer never handed it one: discovery types the
+   * file `doc`, and only `php` and `yaml` were extracted. Every hook edge
+   * then pointed at a symbol that did not exist, and a module reached only
+   * through its hooks read as reached by nothing.
+   */
+  public function testHookAnApiFileDocumentsIsSymbol(): void {
+    file_put_contents(
+      $this->root . '/modules/my_module/my_module.api.php',
+      "<?php\n\n/**\n * Alters a greeting.\n */\nfunction hook_my_module_greeting_alter(array &\$greeting): void {\n}\n",
+    );
+    $this->indexer()->index();
+
+    $hooks = $this->graph->findSymbols('hook:my_module_greeting_alter', 10);
+    $this->assertCount(1, $hooks);
+    $this->assertSame('my_module', $hooks[0]['module']);
+  }
+
+  /**
    * The vendor directory is never indexed.
    */
   public function testSkipsVendor(): void {

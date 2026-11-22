@@ -41,7 +41,8 @@ final class RepoIndexer {
    * v4: a call on `$this`, `self::` or `static::` is a `calls` edge to the
    * method it names, so a protected helper's callers are found. v5: what
    * decides a re-parse is the file's extension with its content (F-502),
-   * so every stored hash is of another thing and the index is rebuilt.
+   * so every stored hash is of another thing and the index is rebuilt, and
+   * the hooks an api.php documents are indexed here, as v3 meant (F-498).
    */
   public const int INDEXER_VERSION = 5;
 
@@ -69,6 +70,37 @@ final class RepoIndexer {
     private readonly CodeGraphStorageInterface $graph,
     private readonly string $root,
   ) {}
+
+  /**
+   * The hooks an api.php documents, and nothing else of it.
+   *
+   * Discovery types an `.api.php` as documentation, and only code was
+   * extracted, so the extractor's `hook:NAME` declaration (v3) never ran
+   * here: every hook edge pointed at a symbol that did not exist (F-498).
+   * The file's functions are examples, not code that runs, so their own
+   * symbols and the calls in their bodies are left out.
+   *
+   * @param string $content
+   *   The file's content.
+   * @param string $path
+   *   Its path.
+   * @param string $module
+   *   The extension it belongs to.
+   *
+   * @return array{symbols: array<int, array{fqcn: string, kind: string, file: string, line: int, module: string}>, edges: array<int, array{src: string, dst: string, kind: string}>}
+   *   The hook symbols, and no edges.
+   */
+  private function documentedHooks(string $content, string $path, string $module): array {
+    if (!str_ends_with($path, '.api.php')) {
+      return ['symbols' => [], 'edges' => []];
+    }
+    $extracted = $this->php->extract($content, $path, $module);
+
+    return [
+      'symbols' => array_values(array_filter($extracted['symbols'], static fn (array $symbol): bool => $symbol['kind'] === 'hook')),
+      'edges' => [],
+    ];
+  }
 
   /**
    * Indexes the repository.
@@ -124,6 +156,7 @@ final class RepoIndexer {
       $extracted = match ($file['type']) {
         'php' => $this->php->extract($content, $path, $file['module']),
         'yaml' => $this->yaml->extract($content, $path, $file['module']),
+        'doc' => $this->documentedHooks($content, $path, $file['module']),
         default => ['symbols' => [], 'edges' => []],
       };
       foreach ($extracted['symbols'] as $symbol) {

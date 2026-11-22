@@ -65,6 +65,18 @@ final class PathGuardTest extends TestCase {
   }
 
   /**
+   * An empty base holds nothing (F-504).
+   *
+   * With the base's trailing slash trimmed, an empty one became "/", and
+   * every absolute path starts with that. No caller passes one today.
+   */
+  public function testEmptyBaseHoldsNothing(): void {
+    $this->assertFalse(PathGuard::isWithin('', '/etc/passwd'));
+    $this->assertFalse(PathGuard::isWithin('', ''));
+    $this->assertTrue(PathGuard::isWithin('/', '/etc/passwd'), 'the filesystem root still holds everything');
+  }
+
+  /**
    * Accepts an in-bounds target and returns its canonical path.
    */
   public function testContainAcceptsInBoundsTargets(): void {

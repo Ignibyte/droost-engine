@@ -83,7 +83,16 @@ final class OpencodeHarnessInstaller extends AbstractHarnessInstaller {
     }
     $data = JsonMerge::read($path);
     $data = JsonMerge::unsetPath($data, 'mcp', 'droost');
-    if (isset($data['instructions']) && is_array($data['instructions'])) {
+    // THE POINTER STAYS WHILE IT POINTS AT SOMETHING OF THE PROJECT'S. It is
+    // the line droost adds and the line a person writes for their own
+    // AGENTS.md, and nothing records which it was. With text of the
+    // project's own still in AGENTS.md, the instruction is still right,
+    // whoever wrote it; taking it away lost a person's line (F-504).
+    $agents = $this->read($root, 'AGENTS.md');
+    $projects = ManagedRegion::isWellFormed($agents, Markers::MD_BEGIN, Markers::MD_END)
+      ? trim(ManagedRegion::strip($agents, Markers::MD_BEGIN, Markers::MD_END)) !== ''
+      : trim($agents) !== '';
+    if (!$projects && isset($data['instructions']) && is_array($data['instructions'])) {
       $data['instructions'] = array_values(array_filter(
         $data['instructions'],
         static fn(mixed $i): bool => $i !== self::AGENTS_POINTER,
